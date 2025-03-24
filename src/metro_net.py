@@ -1,19 +1,55 @@
 # build from TT, STA.
 # 所有UID是都是地面层，nid分为上行和下行，表示站台，换乘需要从站台（nid）到达地面（uid）然后再去站台（nid），站台与地面层有一个极小的cost
+import itertools
+
 import pandas as pd
 
-from src.utils import read_data
+from src.utils import read_data, read_platform_exceptions
 
 
-def gen_node_from_sta() -> pd.DataFrame:
+def gen_node_from_sta(save_fn: str = None) -> pd.DataFrame:
     """
     Generate node information from the station file.
     UID is used for ground surfaces, NID * 10 + 0 is for downward platform, NID * 10 + 1 is for upward platform.
-    :return:
-    """
-    df = read_data(fn="STA")
 
-    pass
+    :param save_fn: file path to save node info.
+    :return: Dataframe with columns ('STATION_NID', 'STATION_UID', 'IS_TRANSFER', 'IS_TERMINAL', 'LINE_NID') and
+        index ('node_id').
+    """
+    df = read_data(fn="STA").reset_index()
+    df1 = df.copy()
+    df2 = df.copy()
+    df1["node_id"] = df1["STATION_NID"] * 10
+    df1["updown"] = 1  # downward
+    df2["node_id"] = df2["STATION_NID"] * 10 + 1
+    df2["updown"] = -1  # upward
+    df["node_id"] = df['STATION_UID']
+    df["updown"] = 0  # ground
+    nodes = pd.concat(
+        [
+            df1,
+            df2,
+            df.drop_duplicates(subset=["node_id"]).drop(columns=["STATION_NID", "LINE_NID"])
+        ],
+        ignore_index=True
+    )
+    nodes['STATION_NID'] = nodes['STATION_NID'].astype("Int64")
+    nodes['LINE_NID'] = nodes['LINE_NID'].astype("Int8")
+    nodes['node_id'] = nodes['node_id'].astype("Int64")
+    nodes['updown'] = nodes['updown'].astype("int8")
+
+    assert nodes.node_id.unique().size == nodes.shape[0], "node id not unique."
+
+    nodes.set_index("node_id", inplace=True)
+
+    if save_fn:
+        print(nodes.sample(n=10))
+        nodes.info()
+        full_fn = f"./data/cd/{save_fn}.pkl"
+        if input(f"Save node in '{full_fn}'? (y/n): ").lower() == "y":
+            nodes.to_pickle(full_fn)
+            print(f"{full_fn} saved.")
+    return nodes
 
 
 def gen_train_links_from_tt() -> pd.DataFrame:
@@ -75,7 +111,87 @@ def gen_train_links_from_tt() -> pd.DataFrame:
     gb = df.groupby(["STATION_NID", "STATION_NID2", "UPDOWN"])
     train_links = pd.DataFrame(index=gb.indices.keys()).rename_axis(index=['nid1', 'nid2', 'updown'])
     train_links["count"] = gb['time'].count()
+    # delete special links (to and from train parks)
     train_links = train_links[train_links['count'] > NO_MIN_PASS_TRAIN]
     train_links['time'] = gb['time'].median()
 
     return train_links
+
+
+def gen_walk_links_from_nodes(
+        nodes: pd.DataFrame = None,
+        platform_swap_time: float = 3,
+        entry_time: float = 15,
+        egress_time: float = 15,
+        platform_exceptions: dict[int, list[list[int]]] = None,
+) -> pd.DataFrame:
+    """
+    Generate walk links from nodes.
+    :param nodes: Dataframe with columns ('STATION_NID', 'STATION_UID', 'IS_TRANSFER', 'IS_TERMINAL', 'LINE_NID') and
+        index ('node_id'). Defaults to None, means reading from `read_data(fn='node_info')`.
+    :param platform_swap_time: Defaults to 4 seconds.
+    :param entry_time: Defaults to 15 seconds.
+    :param egress_time: Defaults to 15 seconds.
+    :param platform_exceptions: dict[uid, [[node_id, node_id], [node_id]]]. A dictionary where keys are station uids
+        and values are lists of connected platform node ids. Represents special platform connection cases.
+        Defaults to None, means generated from `read_platform_exceptions()`.
+    :return: Dataframe of columns ['node_id1', 'node_id2', 'link_type', 'link_weight'].
+    """
+    platform_exceptions = read_platform_exceptions() if platform_exceptions is None else platform_exceptions
+    # print(platform_exceptions)
+    nodes = read_data(fn="node_info").dropna(subset=["LINE_NID"]) if nodes is None else nodes
+
+    links = []  # [node_id1, node_id2, link_type, link_weight]
+
+    # get entry, egress links
+    for (ground_node,), platform_nodes_info in nodes[["STATION_UID"]].groupby(["STATION_UID"]):
+        for ground_node_id, platform_node_id in itertools.product([ground_node], platform_nodes_info.index):
+            links.append([ground_node_id, platform_node_id, "entry", entry_time])
+            links.append([platform_node_id, ground_node_id, "egress", egress_time])
+
+    # get platform swap links
+    processed_special_uids = set()
+    for (uid, line_nid), platform_nodes_info in nodes[["STATION_UID", "LINE_NID"]].groupby(
+            by=["STATION_UID", "LINE_NID"]):
+        if uid in platform_exceptions:
+            if uid in processed_special_uids:
+                continue
+            processed_special_uids.add(uid)
+            for platform_nodes in platform_exceptions[uid]:
+                if len(platform_nodes) >= 2:
+                    for plat1, plat2 in itertools.permutations(platform_nodes, 2):
+                        links.append([plat1, plat2, "platform_swap", platform_swap_time])
+        else:
+            for plat1, plat2 in itertools.permutations(platform_nodes_info.index, 2):
+                links.append([plat1, plat2, "platform_swap", platform_swap_time])
+
+    # get dataframe
+    walk_links = pd.DataFrame(links, columns=["node_id1", "node_id2", "link_type", "link_weight"], )
+    walk_links = walk_links.astype({"node_id1": "int", "node_id2": "int", "link_type": "str", })
+
+    # print(walk_links.sample(n=10))
+    return walk_links
+
+
+def gen_links(save_fn: str = None) -> pd.DataFrame:
+    train_links = gen_train_links_from_tt().reset_index().drop(columns=["count"])
+    train_links['node_id1'] = (train_links['nid1'] * 10).astype(int)
+    train_links['node_id2'] = (train_links['nid2'] * 10).astype(int)
+    train_links['link_type'] = "in_vehicle"
+    train_links.loc[train_links['updown'] == -1, "node_id1"] += 1
+    train_links.loc[train_links['updown'] == -1, "node_id2"] += 1
+    train_links.drop(columns=["nid1", "nid2", "updown"], inplace=True)
+    train_links.rename(columns={"time": "link_weight"}, inplace=True)
+
+    walk_links = gen_walk_links_from_nodes()
+
+    all_links = pd.concat([train_links, walk_links], ignore_index=True)
+
+    if save_fn:
+        print(all_links.sample(n=10))
+        all_links.info()
+        full_fn = f"./data/cd/{save_fn}.pkl"
+        if input(f"Save node in '{full_fn}'? (y/n): ").lower() == "y":
+            all_links.to_pickle(full_fn)
+            print(f"{full_fn} saved.")
+    return all_links
