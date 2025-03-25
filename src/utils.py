@@ -1,3 +1,4 @@
+import functools
 import json
 import time
 
@@ -8,6 +9,7 @@ DATA_DIR = "data//cd"
 
 def execution_timer(func):
     """Function execution timer decorator, optionally display timing information."""
+
     def wrapper(*args, **kw):
         if "show_timer" in kw and not kw['show_timer']:  # don't print anything
             res = func(*args, **kw)  # 执行函数
@@ -27,10 +29,44 @@ def execution_timer(func):
     return wrapper
 
 
+def file_saver(func):
+    """File saver decorator, saving .pkl files with `save_fn` parameter."""
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        # Get the file name from the save_fn parameter
+        save_fn = kwargs.get('save_fn', None)
+
+        # Call the original function to generate the dataframe
+        res = func(*args, **kwargs)
+
+        if save_fn:
+            # display saving dataframe
+            print(res.sample(n=10))
+            res.info()
+
+            full_fn = f"./data/cd/{save_fn}.pkl"
+            res.to_pickle(full_fn)
+            print(f"{full_fn} saved.")
+
+        return res
+
+    return wrapper
+
+
 @execution_timer  # ~ 0.1433 seconds for AFC
-def read_data(fn: str = "AFC", show_timer: bool = False) -> pd.DataFrame:
+def read_data(fn: str = "AFC", show_timer: bool = False) -> pd.DataFrame | dict | list:
     """Read data file and drop specific columns based on file name."""
-    df = pd.read_pickle(f"{DATA_DIR}//{fn}.pkl")
+    if fn.endswith(".csv"):
+        df = pd.read_csv(f"{DATA_DIR}//{fn}")
+    elif fn.endswith(".pkl"):
+        df = pd.read_pickle(f"{DATA_DIR}//{fn}")
+    elif fn.endswith(".json"):
+        with open(f"{DATA_DIR}//{fn}", "r") as f:
+            df = json.load(f)
+    else:
+        df = pd.read_pickle(f"{DATA_DIR}//{fn}.pkl")
+
     if fn == "AFC":
         df = df.drop(columns=["STATION1_NID", "STATION2_NID", "STATION1_TIME", "STATION2_TIME"])
     elif fn == "STA":
