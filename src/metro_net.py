@@ -241,9 +241,14 @@ class ChengduMetro:
         return _df["STATION_UID"].to_dict()
 
     def plot_metro_net(self, coordinates: pd.DataFrame):
-        # use only nid
         """A simple networkx based plotting function for metro network."""
         uid_dict = self._get_nid_uid_dict()
+
+        coordinates = coordinates.set_index("station_nid")
+        coordinates['uid'] = uid_dict
+        coordinates.drop_duplicates(subset="uid", inplace=True)
+        node_info_list = [(row.uid, {"pos": (row.x, row.y)}) for row in coordinates.itertuples()]
+
         links = self.links[self.links["link_type"] == "in_vehicle"].drop(columns=["link_type"]).copy()
         links["node_id1"], links["node_id2"] = links["node_id1"] // 10, links["node_id2"] // 10
         link_info_list = [
@@ -275,19 +280,45 @@ class ChengduMetro:
         plt.show()
         return
 
+    def plot_metro_net_with_plotly(self, coordinates: pd.DataFrame, _paths: list[list[int]]):
+        """
+        A plotly based 3D plotting function for metro network. Optionally displaying paths with different colors.
 
-    def _cal_path_cost(self, _path: list[int]) -> float:
+        Node_id, instead of STATION_UID, is used for plotting.
+
+        每条线路都有一个固定且互不相同的高度坐标，in-vehicle link可以用黑色表示，entry 和 egress links 可以用深灰色表示，
+        platform swap link 可以用淡灰色表示。 k短路各自用不同的颜色，叠加在上面表示，可以选择性开启或关闭。
+
+        （后期再实现这个功能）
+        """
+        ...
+
+    def _cal_path_perceived_cost(self, _path: list[int], transfer_perceived_time: float = 600) -> float:
+        """
+        这个函数是不是可以改成：只求换乘数量或者线路？
+        【原因】
+            1. cost一般直接就都有；
+            2. 只得到换乘次数相当于把换乘时间偏差这个参数往上调整了；
+            3. 真的需要得到perceived cost这个值吗？实际上就轨迹估计来说，只要判断路径本身合理，按照最短时间计算k短路应该就可以吧。
+                （换乘数量可以作为判断路径本身是否合理的依据，比如说不接受换乘次数大于4次的路径）
+        """
         _cost = 0
-        for i, j in zip(_path[:-1], _path[1:]):
-            _cost += self.G.edges[i, j]["weight"]
-        return _cost
-
-    def _cal_path_preceived_cost(self, _path: list[int]) -> float:
-
-        _cost = 0
+        _lines = []
 
         for i, j in zip(_path[:-1], _path[1:]):
-            ...
+            _cost += self.G.edges[i, j]["weight"]  # absolute weight
+            _lines.append(self.G.edges[i, j]["passing_line"])
+
+        print(_cost, _lines)
+
+        trans_cnt = len(set(_lines)) - 2
+        perceived_cost = _cost + transfer_perceived_time * trans_cnt
+        print(perceived_cost, _lines)
+
+        ...
+
+    # def _find_all_pair_shortest_paths(self):
+    #     nx.all_pairs_bellman_ford_path
 
     def find_k_shortest_paths(
             self,
@@ -298,5 +329,7 @@ class ChengduMetro:
         if _source == _target:
             raise nx.NetworkXNoPath(f"Source and target are the same station ({_source})!")
 
-
+        _min_cost_list, shortest_path_list = nx.single_source_dijkstra(self.G, _source)
+        nx.all_pairs_dijkstra
+        print(len(_min_cost_list))
         ...
