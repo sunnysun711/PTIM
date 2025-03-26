@@ -4,7 +4,7 @@ import time
 
 import pandas as pd
 
-DATA_DIR = "data//cd"
+from src import DATA_DIR
 
 
 def execution_timer(func):
@@ -45,7 +45,7 @@ def file_saver(func):
             print(res.sample(n=10))
             res.info()
 
-            full_fn = f"./data/cd/{save_fn}.pkl"
+            full_fn = fr"{DATA_DIR}/{save_fn}.pkl"
             res.to_pickle(full_fn)
             print(f"{full_fn} saved.")
 

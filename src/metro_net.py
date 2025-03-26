@@ -191,7 +191,7 @@ def gen_links(save_fn: str = None) -> pd.DataFrame:
     return all_links
 
 
-def find_shortest_path(G:nx.DiGraph, source_id:int, target_id:int) -> tuple[float, list[int]]:
+def find_shortest_path(G: nx.DiGraph, source_id: int, target_id: int) -> tuple[float, list[int]]:
     """
     :return: tuple[path cost, list[passing nodes]]
     """
@@ -201,6 +201,15 @@ def find_shortest_path(G:nx.DiGraph, source_id:int, target_id:int) -> tuple[floa
 class ChengduMetro:
     def __init__(self, nodes: pd.DataFrame, links: pd.DataFrame):
         self.nodes = nodes  # 'node_id' (index), 'STATION_NID', 'STATION_UID', 'IS_TRANSFER', 'IS_TERMINAL', 'LINE_NID'
+
+        # add passing line
+        links['passing_line'] = 0
+        links.loc[
+            links['link_type'] == "in_vehicle", "passing_line"
+        ] = (
+                    links.loc[links['link_type'] == "in_vehicle", "node_id1"] // 10 - 10000
+            ) // 100
+
         self.links = links  # 'node_id1', 'node_id2', 'link_type', 'link_weight'
         self.G = nx.DiGraph()
 
@@ -208,7 +217,10 @@ class ChengduMetro:
         self.G.add_nodes_from(node_info_list)
 
         link_info_list = [
-            (row.node_id1, row.node_id2, {"type": row.link_type, "weight": row.link_weight})
+            (
+                row.node_id1, row.node_id2,
+                {"type": row.link_type, "weight": row.link_weight, "passing_line": row.passing_line}
+            )
             for row in links.itertuples()
         ]
         self.G.add_edges_from(link_info_list)
@@ -224,32 +236,32 @@ class ChengduMetro:
         for edge in self.G.edges(data=True):
             print(edge)
 
+    def _get_nid_uid_dict(self) -> dict[int, int]:
+        _df = self.nodes[["STATION_NID", "STATION_UID"]].drop_duplicates().set_index("STATION_NID")
+        return _df["STATION_UID"].to_dict()
+
     def plot_metro_net(self, coordinates: pd.DataFrame):
         # use only nid
+        """A simple networkx based plotting function for metro network."""
+        uid_dict = self._get_nid_uid_dict()
         links = self.links[self.links["link_type"] == "in_vehicle"].drop(columns=["link_type"]).copy()
-        links["node_id1"], links["node_id2"] = links["node_id1"]//10, links["node_id2"]//10
+        links["node_id1"], links["node_id2"] = links["node_id1"] // 10, links["node_id2"] // 10
         link_info_list = [
-            (row.node_id1, row.node_id2, {"weight": row.link_weight})
+            (uid_dict[row.node_id1], uid_dict[row.node_id2], {"weight": row.link_weight})
             for row in links.itertuples()
         ]
-
-        node_info_list = [
-            (row.station_nid, {"pos": (row.x, row.y)})
-            for row in coordinates.itertuples()
-        ]
-
         # generate a graph object
         G = nx.DiGraph()
         G.add_nodes_from(node_info_list)
         G.add_edges_from(link_info_list)
 
         options = {
-            "font_size": 12,
+            "font_size": 8,
             "node_size": 500,
             "node_color": "white",
             "edgecolors": "gray",
-            "linewidths": 2,
-            "width": 3,
+            "linewidths": 1,
+            "width": 2,
             "with_labels": True,
         }
 
