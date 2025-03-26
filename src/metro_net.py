@@ -1,6 +1,7 @@
 # build from TT, STA.
 # 所有UID是都是地面层，nid分为上行和下行，表示站台，换乘需要从站台（nid）到达地面（uid）然后再去站台（nid），站台与地面层有一个极小的cost
 import itertools
+from typing import Iterable
 
 import networkx as nx
 import pandas as pd
@@ -203,14 +204,22 @@ class ChengduMetro:
         self.nodes = nodes  # 'node_id' (index), 'STATION_NID', 'STATION_UID', 'IS_TRANSFER', 'IS_TERMINAL', 'LINE_NID'
 
         # add passing line
-        links['passing_line'] = 0
+        links['passing_line'] = 0  # entry, egress, platform_swap: 0
+        links['updown'] = 0  # entry, egress, platform_swap: 0
         links.loc[
             links['link_type'] == "in_vehicle", "passing_line"
         ] = (
                     links.loc[links['link_type'] == "in_vehicle", "node_id1"] // 10 - 10000
             ) // 100
 
-        self.links = links  # 'node_id1', 'node_id2', 'link_type', 'link_weight'
+        links.loc[
+            (links['link_type'] == "in_vehicle") & (links["node_id1"] % 10 == 0), "updown"
+        ] = 1  # downward
+        links.loc[
+            (links['link_type'] == "in_vehicle") & (links["node_id1"] % 10 == 1), "updown"
+        ] = -1  # upward
+
+        self.links = links  # 'node_id1', 'node_id2', 'link_type', 'link_weight', 'passing_line', 'updown'
         self.G = nx.DiGraph()
 
         node_info_list = [(k, v) for k, v in nodes.to_dict("index").items()]
@@ -219,11 +228,21 @@ class ChengduMetro:
         link_info_list = [
             (
                 row.node_id1, row.node_id2,
-                {"type": row.link_type, "weight": row.link_weight, "passing_line": row.passing_line}
+                {"type": row.link_type, "weight": row.link_weight,
+                 "line": row.passing_line, "updown": row.updown}
             )
             for row in links.itertuples()
         ]
         self.G.add_edges_from(link_info_list)
+
+    def _get_nid_uid_dict(self) -> dict[int, int]:
+        _df = self.nodes[["STATION_NID", "STATION_UID"]].drop_duplicates().set_index("STATION_NID")
+        return _df["STATION_UID"].to_dict()
+
+    def _get_uid_list(self) -> Iterable[int]:
+        # uids = sorted(self.nodes['STATION_UID'].to_list())
+        # return set(uids)
+        return range(1001, 1137)
 
     def print_graph_info(self):
         # 打印图的信息来验证
@@ -235,10 +254,6 @@ class ChengduMetro:
         print("Edges with attributes:")
         for edge in self.G.edges(data=True):
             print(edge)
-
-    def _get_nid_uid_dict(self) -> dict[int, int]:
-        _df = self.nodes[["STATION_NID", "STATION_UID"]].drop_duplicates().set_index("STATION_NID")
-        return _df["STATION_UID"].to_dict()
 
     def plot_metro_net(self, coordinates: pd.DataFrame):
         """A simple networkx based plotting function for metro network."""
@@ -293,43 +308,59 @@ class ChengduMetro:
         """
         ...
 
-    def _cal_path_perceived_cost(self, _path: list[int], transfer_perceived_time: float = 600) -> float:
+    def get_passing_info(self, path: list[int]) -> list[tuple[str, int, int]]:
         """
-        这个函数是不是可以改成：只求换乘数量或者线路？
-        【原因】
-            1. cost一般直接就都有；
-            2. 只得到换乘次数相当于把换乘时间偏差这个参数往上调整了；
-            3. 真的需要得到perceived cost这个值吗？实际上就轨迹估计来说，只要判断路径本身合理，按照最短时间计算k短路应该就可以吧。
-                （换乘数量可以作为判断路径本身是否合理的依据，比如说不接受换乘次数大于4次的路径）
+        Get a list of link types, passing lines, and updown directions for a path.
+        :param path: list of node_id.
+        :return: list of linke types, passing lines and updown directions.
+            For e.g. [(type1, line1, upd1), (type2, line2, upd2), ...].
         """
-        _cost = 0
-        _lines = []
+        passing_info = []
+        for i, j in zip(path[:-1], path[1:]):
+            cur_edge = self.G.edges[i, j]
+            cur_info = (cur_edge["type"], cur_edge["line"], cur_edge["updown"])
+            if len(passing_info) == 0 or passing_info[-1] != cur_info:
+                passing_info.append(cur_info)
+        return passing_info
 
-        for i, j in zip(_path[:-1], _path[1:]):
-            _cost += self.G.edges[i, j]["weight"]  # absolute weight
-            _lines.append(self.G.edges[i, j]["passing_line"])
+    def compress_passing_info(self, passing_info: list[tuple[str, int, int]]) -> list[tuple[int, int]]:
+        lines_upd = [(i[1], i[2]) for i in passing_info if i[1] != 0]
+        return lines_upd
 
-        print(_cost, _lines)
+    def get_trans_cnt(self, path: list[int] = None, passing_info: list[tuple[str, int, int]] = None,
+                      passing_info_compact: list[tuple[int, int]] = None) -> int:
+        """Get transfer count from either path, passing_info or passing_info_compact."""
+        if passing_info_compact is not None:
+            lines_upd = passing_info_compact
+        elif passing_info is not None:
+            lines_upd = self.compress_passing_info(passing_info)
+        elif path is not None:
+            passing_info = self.get_passing_info(path)
+            lines_upd = self.compress_passing_info(passing_info)
+        else:
+            raise ValueError("At least one of path, passing_info, or passing_info_compact must be provided.")
+        return len(lines_upd) - 1
 
-        trans_cnt = len(set(_lines)) - 2
-        perceived_cost = _cost + transfer_perceived_time * trans_cnt
-        print(perceived_cost, _lines)
+    def find_k_shortest_paths(self, k: int = 8, theta1: float = 0.6, theta2: float = 600, ):
 
-        ...
+        # 思路：
+        uid_list = self._get_uid_list()  # all ground nodes
+        for o_uid in uid_list:
+            # get all nodes shortest paths with source as o_uid
+            lengths, s_paths = nx.single_source_dijkstra(G=self.G, source=o_uid)
+            for d_uid in uid_list:
+                if o_uid == d_uid:
+                    continue
+                shortest_path = s_paths[d_uid]
+                shortest_path_length = lengths[d_uid]
 
-    # def _find_all_pair_shortest_paths(self):
-    #     nx.all_pairs_bellman_ford_path
+                max_path_length = min(shortest_path_length * (1 + theta1), shortest_path_length + theta2)
 
-    def find_k_shortest_paths(
-            self,
-            _source: int, _target: int,
-            k: int = 5,
-            theta1: float = 0.6, theta2: float = 600,
-    ):
-        if _source == _target:
-            raise nx.NetworkXNoPath(f"Source and target are the same station ({_source})!")
+                print(shortest_path, shortest_path_length, max_path_length)
 
-        _min_cost_list, shortest_path_list = nx.single_source_dijkstra(self.G, _source)
-        nx.all_pairs_dijkstra
-        print(len(_min_cost_list))
+                # ！不可以用 <nx.all_simple_paths> 和 max_path_length 作为 cutoff 来生成k短路，计算太慢。
+                # Ref: https://blog.csdn.net/sheyueyu/article/details/133774669
+                # 在我的方法中，只移除 in_vehicle 弧，进出站、换站台都【不可】被移除。
+
+
         ...

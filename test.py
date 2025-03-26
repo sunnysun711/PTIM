@@ -8,19 +8,21 @@ def main():
     nodes = read_data("node_info", show_timer=False)
     links = read_data("link_info", show_timer=False)
     net = ChengduMetro(nodes, links)
+
     # net.plot_metro_net(coordinates=read_data("coordinates.csv"))
 
-    source, target = np.random.choice(range(1001, 1137), 2)
-
+    # source, target = np.random.choice(range(1001, 1137), 2)
     # cost, path = nx.single_source_dijkstra(net.G, source=source, target=target)
-
     # print(cost, path)
+    # pass_info = net.get_passing_info(path)
+    # print(pass_info)
+    # pass_info_compact = net.compress_passing_info(pass_info)
+    # print(pass_info_compact)
+    # trans_cnt = net.get_trans_cnt(passing_info_compact=pass_info_compact)
+    # print("Number of tranasfers: ", trans_cnt)
 
-    print(list(nx.shortest_simple_paths(net.G, source, target, weight='weight')))
+    net.find_k_shortest_paths()
 
-
-    # net._cal_path_perceived_cost(path)
-    # net.find_k_shortest_paths()
     pass
 
 
