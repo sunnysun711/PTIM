@@ -1,6 +1,7 @@
 # build from TT, STA.
 # 所有UID是都是地面层，nid分为上行和下行，表示站台，换乘需要从站台（nid）到达地面（uid）然后再去站台（nid），站台与地面层有一个极小的cost
 import itertools
+from heapq import heappush, heappop
 from typing import Iterable
 
 import networkx as nx
@@ -192,15 +193,15 @@ def gen_links(save_fn: str = None) -> pd.DataFrame:
     return all_links
 
 
-def find_shortest_path(G: nx.DiGraph, source_id: int, target_id: int) -> tuple[float, list[int]]:
-    """
-    :return: tuple[path cost, list[passing nodes]]
-    """
-    return nx.single_source_dijkstra(G, source_id, target_id)
-
-
 class ChengduMetro:
     def __init__(self, nodes: pd.DataFrame, links: pd.DataFrame):
+        """
+        Initialize the ChengduMetro object with nodes and links data.
+
+        :param nodes: Dataframe of columns ['node_id' (index), 'STATION_NID', 'STATION_UID', 'IS_TRANSFER',
+            'IS_TERMINAL', 'LINE_NID']
+        :param links: Dataframe of columns ['node_id1', 'node_id2', 'link_type', 'link_weight']
+        """
         self.nodes = nodes  # 'node_id' (index), 'STATION_NID', 'STATION_UID', 'IS_TRANSFER', 'IS_TERMINAL', 'LINE_NID'
 
         # add passing line
@@ -236,16 +237,25 @@ class ChengduMetro:
         self.G.add_edges_from(link_info_list)
 
     def _get_nid_uid_dict(self) -> dict[int, int]:
+        """
+        Get a dictionary mapping NID to UID.
+
+        :return: A dictionary with NID as keys and UID as values.
+        """
         _df = self.nodes[["STATION_NID", "STATION_UID"]].drop_duplicates().set_index("STATION_NID")
         return _df["STATION_UID"].to_dict()
 
-    def _get_uid_list(self) -> Iterable[int]:
+    def _get_uids(self) -> Iterable[int]:
+        """
+        Get a list of unique UIDs.
+
+        :return: An iterable of unique UIDs.
+        """
         # uids = sorted(self.nodes['STATION_UID'].to_list())
         # return set(uids)
         return range(1001, 1137)
 
     def print_graph_info(self):
-        # 打印图的信息来验证
         print(f"Total nodes: {len(self.G.nodes)}")
         print(f"Total edges: {len(self.G.edges)}")
         print("Nodes with attributes:")
@@ -256,7 +266,11 @@ class ChengduMetro:
             print(edge)
 
     def plot_metro_net(self, coordinates: pd.DataFrame):
-        """A simple networkx based plotting function for metro network."""
+        """
+        A simple networkx based plotting function for metro network.
+
+        :param coordinates: Dataframe containing node coordinates. columns ["station_nid", "x", "y"]
+        """
         uid_dict = self._get_nid_uid_dict()
 
         coordinates = coordinates.set_index("station_nid")
@@ -308,6 +322,12 @@ class ChengduMetro:
         """
         ...
 
+    def cal_path_length(self, path: list[int]) -> float:
+        cost = 0
+        for i, j in zip(path[:-1], path[1:]):
+            cost += self.G.edges[i, j]["weight"]
+        return cost
+
     def get_passing_info(self, path: list[int]) -> list[tuple[str, int, int]]:
         """
         Get a list of link types, passing lines, and updown directions for a path.
@@ -324,6 +344,13 @@ class ChengduMetro:
         return passing_info
 
     def compress_passing_info(self, passing_info: list[tuple[str, int, int]]) -> list[tuple[int, int]]:
+        """
+        Compress the passing information into a more compact form.
+
+        :param passing_info: List of tuples containing link types, passing lines, and updown directions.
+        :return: Compressed list of tuples.
+            For e.g. [(line1, upd1), (line2, upd2), ...].
+        """
         lines_upd = [(i[1], i[2]) for i in passing_info if i[1] != 0]
         return lines_upd
 
@@ -341,10 +368,16 @@ class ChengduMetro:
             raise ValueError("At least one of path, passing_info, or passing_info_compact must be provided.")
         return len(lines_upd) - 1
 
-    def find_k_shortest_paths(self, k: int = 8, theta1: float = 0.6, theta2: float = 600, ):
+    def find_all_pairs_k_paths(self, k: int = 8, theta1: float = 0.6, theta2: float = 600, ):
+        """
+        Find k shortest paths for all OD pairs (only ground nodes).
 
-        # 思路：
-        uid_list = self._get_uid_list()  # all ground nodes
+        :param k: Number of shortest paths to find. Defaults to 8.
+        :param theta1: Parameter for path selection. Defaults to 0.6.
+        :param theta2: Parameter for path selection. Defaults to 600.
+        """
+
+        uid_list = self._get_uids()  # all ground nodes
         for o_uid in uid_list:
             # get all nodes shortest paths with source as o_uid
             lengths, s_paths = nx.single_source_dijkstra(G=self.G, source=o_uid)
@@ -362,5 +395,56 @@ class ChengduMetro:
                 # Ref: https://blog.csdn.net/sheyueyu/article/details/133774669
                 # 在我的方法中，只移除 in_vehicle 弧，进出站、换站台都【不可】被移除。
 
-
         ...
+
+    def find_k_paths_via_yen(
+            self, shortest_path: list[int], shortest_path_length: float, max_length: int,
+            k: int, ) -> tuple[list[float], list[list[int]]]:
+
+        source, target = shortest_path[0], shortest_path[-1]
+        lengths, paths = [shortest_path_length], [shortest_path]
+        c = itertools.count()
+        B = []
+        G = self.G.copy()
+
+        for i in range(1, k):
+            for j in range(1, len(paths[-1]) - 1):
+                spur_node = paths[-1][j]
+                root_path = paths[-1][:j + 1]
+
+                # remove all nodes connected to spur_node that are in current k-paths
+                edges_removed = []
+                for c_path in paths:
+                    if len(c_path) > j and root_path == c_path[: j + 1]:
+                        to_remove_node = c_path[j + 1]
+                        for u, v, edge_attr in [*G.in_edges(nbunch=to_remove_node, data=True),
+                                                *G.out_edges(nbunch=to_remove_node, data=True)]:
+                            edges_removed.append((u, v, edge_attr))
+                            G.remove_edge(u, v)
+
+                # remove all edges connecting nodes in the root path
+                for n in range(len(root_path) - 1):
+                    node = root_path[n]
+                    edges_removed_root = []
+                    for (u, v, edge_attr) in [*G.in_edges(nbunch=node, data=True),
+                                              *G.out_edges(nbunch=node, data=True)]:
+                        edges_removed_root.append((u, v, edge_attr))
+                    G.remove_edges_from(edges_removed_root)
+
+                # find paths from spur_node
+                spur_paths_length, spur_paths = nx.single_source_dijkstra(G, spur_node, cutoff=max_length)
+                if target in spur_paths and spur_paths[target]:
+                    total_path = root_path[:-1] + spur_paths[target]
+                    total_path_length = self.cal_path_length(total_path)
+                    heappush(B, (total_path_length, next(c), total_path))
+
+                G.add_edges_from(edges_removed)
+            if B:
+                (l, _, p) = heappop(B)
+                lengths.append(l)
+                paths.append(p)
+            else:
+                break
+        return lengths, paths
+
+
