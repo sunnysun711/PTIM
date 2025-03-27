@@ -7,7 +7,7 @@ from typing import Iterable
 import networkx as nx
 import pandas as pd
 
-from src.utils import read_data, read_platform_exceptions, file_saver
+from src.utils import read_data, read_platform_exceptions, file_saver, execution_timer
 
 
 @file_saver
@@ -343,14 +343,18 @@ class ChengduMetro:
                 passing_info.append(cur_info)
         return passing_info
 
-    def compress_passing_info(self, passing_info: list[tuple[str, int, int]]) -> list[tuple[int, int]]:
+    def compress_passing_info(self, passing_info: list[tuple[str, int, int]] = None, path: list[int] = None) -> list[
+        tuple[int, int]]:
         """
         Compress the passing information into a more compact form.
 
         :param passing_info: List of tuples containing link types, passing lines, and updown directions.
+        :param path: List of node id. Default to None, if both provided, use passing_info first.
         :return: Compressed list of tuples.
             For e.g. [(line1, upd1), (line2, upd2), ...].
         """
+        if passing_info is None:
+            passing_info = self.get_passing_info(path)
         lines_upd = [(i[1], i[2]) for i in passing_info if i[1] != 0]
         return lines_upd
 
@@ -408,9 +412,10 @@ class ChengduMetro:
         G = self.G.copy()
 
         for i in range(1, k):
-            for j in range(1, len(paths[-1]) - 1):
+            for j in range(len(paths[-1]) - 1):
                 spur_node = paths[-1][j]
                 root_path = paths[-1][:j + 1]
+                root_path_length = self.cal_path_length(root_path)
 
                 # remove all nodes connected to spur_node that are in current k-paths
                 edges_removed = []
@@ -424,18 +429,30 @@ class ChengduMetro:
 
                 # remove all edges connecting nodes in the root path
                 for n in range(len(root_path) - 1):
-                    node = root_path[n]
+                    nodes = [root_path[n]]
+                    # if nodes[0] > 1e5:  # platform node
+                    #     if nodes[0] % 2 == 1:  # upward platform node
+                    #         nodes.append(nodes[0] - 1)  # append downward
+                    #     else:
+                    #         nodes.append(nodes[0] + 1)
                     edges_removed_root = []
-                    for (u, v, edge_attr) in [*G.in_edges(nbunch=node, data=True),
-                                              *G.out_edges(nbunch=node, data=True)]:
-                        edges_removed_root.append((u, v, edge_attr))
+                    for (u, v, edge_attr) in [*G.in_edges(nbunch=nodes, data=True),
+                                              *G.out_edges(nbunch=nodes, data=True)]:
+                        edges_removed.append((u, v, edge_attr))
+                        edges_removed_root.append((u, v))
                     G.remove_edges_from(edges_removed_root)
 
                 # find paths from spur_node
-                spur_paths_length, spur_paths = nx.single_source_dijkstra(G, spur_node, cutoff=max_length)
+                spur_paths_length, spur_paths = nx.single_source_dijkstra(
+                    G, spur_node, cutoff=max_length - root_path_length)
                 if target in spur_paths and spur_paths[target]:
                     total_path = root_path[:-1] + spur_paths[target]
-                    total_path_length = self.cal_path_length(total_path)
+                    # Add a criterion for:
+                    #   1. Check platform swap after a walk link: with self.get_passing_info(path)
+                    #   2. Detour check. If (nid1 -> nid'1) exists, then (nid'0 -> nid0) should not exist.
+                    #       * should take special care to Sihe Line 1.
+
+                    total_path_length = root_path_length + spur_paths_length[target]
                     heappush(B, (total_path_length, next(c), total_path))
 
                 G.add_edges_from(edges_removed)
@@ -445,6 +462,5 @@ class ChengduMetro:
                 paths.append(p)
             else:
                 break
+
         return lengths, paths
-
-
