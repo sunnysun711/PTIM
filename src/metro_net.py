@@ -235,6 +235,7 @@ class ChengduMetro:
             for row in links.itertuples()
         ]
         self.G.add_edges_from(link_info_list)
+        self.nid2uid = self._get_nid_uid_dict()
 
     def _get_nid_uid_dict(self) -> dict[int, int]:
         """
@@ -271,17 +272,15 @@ class ChengduMetro:
 
         :param coordinates: Dataframe containing node coordinates. columns ["station_nid", "x", "y"]
         """
-        uid_dict = self._get_nid_uid_dict()
-
         coordinates = coordinates.set_index("station_nid")
-        coordinates['uid'] = uid_dict
+        coordinates['uid'] = self.nid2uid
         coordinates.drop_duplicates(subset="uid", inplace=True)
         node_info_list = [(row.uid, {"pos": (row.x, row.y)}) for row in coordinates.itertuples()]
 
         links = self.links[self.links["link_type"] == "in_vehicle"].drop(columns=["link_type"]).copy()
         links["node_id1"], links["node_id2"] = links["node_id1"] // 10, links["node_id2"] // 10
         link_info_list = [
-            (uid_dict[row.node_id1], uid_dict[row.node_id2], {"weight": row.link_weight})
+            (self.nid2uid[row.node_id1], self.nid2uid[row.node_id2], {"weight": row.link_weight})
             for row in links.itertuples()
         ]
         # generate a graph object
@@ -327,6 +326,18 @@ class ChengduMetro:
         for i, j in zip(path[:-1], path[1:]):
             cost += self.G.edges[i, j]["weight"]
         return cost
+
+    def get_passing_uid(self, path: list[int], merge_: bool = False) -> list[int]:
+        """Get passing uid list from path, same consecutive uids are merged as one."""
+        uid_path = [self.nid2uid[node_id // 10] if node_id > 1e5 else node_id for node_id in path]
+
+        if merge_:  # merge consecutive uid
+            uid_path_ = [uid_path[0]]
+            for uid in uid_path[1:]:
+                if uid != uid_path_[-1]:
+                    uid_path_.append(uid)
+            return uid_path_
+        return uid_path
 
     def get_passing_info(self, path: list[int]) -> list[tuple[str, int, int]]:
         """
@@ -409,6 +420,7 @@ class ChengduMetro:
         lengths, paths = [shortest_path_length], [shortest_path]
         c = itertools.count()
         B = []
+        added_paths = []  # storing already added paths with tuple[int] representation
         G = self.G.copy()
 
         for i in range(1, k):
@@ -417,50 +429,68 @@ class ChengduMetro:
                 root_path = paths[-1][:j + 1]
                 root_path_length = self.cal_path_length(root_path)
 
-                # remove all nodes connected to spur_node that are in current k-paths
                 edges_removed = []
+                # remove all nodes connected to spur_node that are in current k-paths
                 for c_path in paths:
                     if len(c_path) > j and root_path == c_path[: j + 1]:
                         to_remove_node = c_path[j + 1]
                         for u, v, edge_attr in [*G.in_edges(nbunch=to_remove_node, data=True),
                                                 *G.out_edges(nbunch=to_remove_node, data=True)]:
                             edges_removed.append((u, v, edge_attr))
-                            G.remove_edge(u, v)
-
                 # remove all edges connecting nodes in the root path
                 for n in range(len(root_path) - 1):
                     nodes = [root_path[n]]
-                    # if nodes[0] > 1e5:  # platform node
-                    #     if nodes[0] % 2 == 1:  # upward platform node
-                    #         nodes.append(nodes[0] - 1)  # append downward
-                    #     else:
-                    #         nodes.append(nodes[0] + 1)
-                    edges_removed_root = []
                     for (u, v, edge_attr) in [*G.in_edges(nbunch=nodes, data=True),
                                               *G.out_edges(nbunch=nodes, data=True)]:
                         edges_removed.append((u, v, edge_attr))
-                        edges_removed_root.append((u, v))
-                    G.remove_edges_from(edges_removed_root)
+                G.remove_edges_from(edges_removed)
 
                 # find paths from spur_node
                 spur_paths_length, spur_paths = nx.single_source_dijkstra(
                     G, spur_node, cutoff=max_length - root_path_length)
-                if target in spur_paths and spur_paths[target]:
-                    total_path = root_path[:-1] + spur_paths[target]
-                    # Add a criterion for:
-                    #   1. Check platform swap after a walk link: with self.get_passing_info(path)
-                    #   2. Detour check. If (nid1 -> nid'1) exists, then (nid'0 -> nid0) should not exist.
-                    #       * should take special care to Sihe Line 1.
 
-                    total_path_length = root_path_length + spur_paths_length[target]
-                    heappush(B, (total_path_length, next(c), total_path))
+                if target in spur_paths and spur_paths[target]:
+                    if self._check_merge_path_feas(root_path, spur_paths[target]):
+                        total_path = root_path[:-1] + spur_paths[target]
+                        total_path_length = root_path_length + spur_paths_length[target]
+
+                        if tuple(total_path) not in added_paths:
+                            heappush(B, (total_path_length, next(c), total_path))
+                            added_paths.append(tuple(total_path))
 
                 G.add_edges_from(edges_removed)
+
             if B:
                 (l, _, p) = heappop(B)
                 lengths.append(l)
                 paths.append(p)
+                print(i, [self.cal_path_length(pa) for pa in paths])
             else:
                 break
 
         return lengths, paths
+
+    def _check_merge_path_feas(self, root_path: list[int], spur_path: list[int]) -> bool:
+        """check path feasibility"""
+        # 1. detour check
+        root_path_uid_list = self.get_passing_uid(root_path, merge_=True)[:-1]  # exclude spur node
+        spur_path_uid_list = self.get_passing_uid(spur_path, merge_=True)
+        for root_uid in root_path_uid_list:
+            if root_uid in spur_path_uid_list and root_uid not in [1043, 1098]:
+                # detour found. special care to Line 1 SiHe and Huafu Avenue.
+                return False
+
+        # 2. walk detour check (platform_swap should only exist between in_vehicle links)
+        passing_info = self.get_passing_info(root_path[:-1] + spur_path)
+        for li1, li2 in zip(passing_info[:-1], passing_info[1:]):
+            two_types = [li1[0], li2[0]]
+            if "platform_swap" in two_types and ("entry" in two_types or "egress" in two_types):
+                # walk detour found
+                return False
+
+        # 3. change back to line_upd (except for line 7)
+        line_upds = self.compress_passing_info(passing_info=passing_info)
+        if len(set(line_upds)) != len(line_upds):
+            return False
+
+        return True
