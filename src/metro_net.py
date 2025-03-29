@@ -439,7 +439,9 @@ class ChengduMetro:
         source, target = shortest_path[0], shortest_path[-1]
         lengths, paths = [shortest_path_length], [shortest_path]
         c = itertools.count()
-        B = []
+        B = []  # all K-paths (topologically feasible)
+        c_ = itertools.count()
+        B_ = []  # all K-paths (practically feasible)
         added_paths = []  # storing already added paths with tuple[int] representation
         G = self.G.copy()
 
@@ -469,23 +471,26 @@ class ChengduMetro:
                 spur_paths_length, spur_paths = nx.single_source_dijkstra(
                     G, spur_node, cutoff=max_length - root_path_length)
 
+                # if found target within cutoff
                 if target in spur_paths and spur_paths[target]:
+                    # calculate path length
                     total_path = root_path[:-1] + spur_paths[target]
-                    if self._check_path_feas(total_path):
-                        # total_path = root_path[:-1] + spur_paths[target]
-                        total_path_length = root_path_length + spur_paths_length[target]
-
-                        if tuple(total_path) not in added_paths:
-                            heappush(B, (total_path_length, next(c), total_path))
-                            added_paths.append(tuple(total_path))
+                    total_path_length = root_path_length + spur_paths_length[target]
+                    # add to B (topologically feasible)
+                    if tuple(total_path) not in added_paths:
+                        added_paths.append(tuple(total_path))
+                        heappush(B, (total_path_length, next(c), total_path))
+                        if self._check_path_feas(total_path):  # (practically feasible)
+                            heappush(B_, (total_path_length, next(c_), total_path))
 
                 G.add_edges_from(edges_removed)
 
             if B:
-                (l, _, p) = heappop(B)
-                lengths.append(l)
-                paths.append(p)
-                # print(i, [self.cal_path_length(pa) for pa in paths])
+                if B_:
+                    (l, _, p) = heappop(B_)
+                    lengths.append(l)
+                    paths.append(p)
+                    # print(i, [self.cal_path_length(pa) for pa in paths])
             else:
                 break
 
@@ -518,7 +523,7 @@ class ChengduMetro:
         line_upd_secs = self.compress_passing_info(passing_info=passing_info)
         line_upds = [(txt.split("|")[0], txt.split("|")[1]) for txt in line_upd_secs]
         for i, (li, upd) in enumerate(line_upds):
-            if li != 7 and (li, upd) in line_upds[i + 1:]:  # change back to the same line_upd (except for line 7)
+            if li != "7" and (li, upd) in line_upds[i + 1:]:  # change back to the same line_upd (except for line 7)
                 return False
 
         return True

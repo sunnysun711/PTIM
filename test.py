@@ -19,11 +19,13 @@ def main():
 
     source, target = np.random.choice(range(1001, 1137), 2)
     # source, target = 1099, 1078  # 1号线内部换乘
-    source, target = 1050, 1131  # 多条 有效路径，用于检验yen算法的求解效果
+    # source, target = 1050, 1131  # 多条 有效路径，用于检验yen算法的求解效果
     # source, target = 1088, 1118  # 西南财大 -> 骡马市 -> 火车南站 -> 神仙树
+    source, target = 1092, 1117
     sta_dict = pd.read_pickle(os.path.join(DATA_DIR, "STA.pkl")) \
         .drop_duplicates(subset="STATION_UID") \
         .reset_index().set_index("STATION_UID")['STATION_NAME'].to_dict()
+    print(sta_dict)
     print(sta_dict[source], " -> ", sta_dict[target])
 
     length, s_path = nx.single_source_dijkstra(net.G, source=source, target=target)
@@ -48,8 +50,8 @@ def main():
     )
     for le, pa in zip(lens, paths):
         print(le, net.compress_passing_info(path=pa))
-        print(pa)
-    print("K-paths", [net.compress_passing_info(net.get_passing_info(pa)) for pa in paths])
+        # print(pa)
+    # print("K-paths", [net.compress_passing_info(net.get_passing_info(pa)) for pa in paths])
 
     pass
 
