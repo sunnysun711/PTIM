@@ -171,7 +171,10 @@ def gen_walk_links_from_nodes(
 
 
 @file_saver
-def gen_links(save_fn: str = None) -> pd.DataFrame:
+def gen_links(platform_swap_time: float = 3,
+              entry_time: float = 15,
+              egress_time: float = 15,
+              save_fn: str = None) -> pd.DataFrame:
     """
 
     :param save_fn:
@@ -186,7 +189,9 @@ def gen_links(save_fn: str = None) -> pd.DataFrame:
     train_links.drop(columns=["nid1", "nid2", "updown"], inplace=True)
     train_links.rename(columns={"time": "link_weight"}, inplace=True)
 
-    walk_links = gen_walk_links_from_nodes()
+    walk_links = gen_walk_links_from_nodes(
+        platform_swap_time=platform_swap_time, entry_time=entry_time, egress_time=egress_time
+    )
 
     all_links = pd.concat([train_links, walk_links], ignore_index=True)
 
@@ -342,6 +347,8 @@ class ChengduMetro:
     def get_passing_info(self, path: list[int]) -> list[tuple[str, int, int]]:
         """
         Get a list of link types, passing lines, and updown directions for a path.
+
+        Consecutive links of the same lines are not merged here. Use compress_passing_info for merged results.
         :param path: list of node_id.
         :return: list of linke types, passing lines and updown directions.
             For e.g. [(type1, line1, upd1), (type2, line2, upd2), ...].
@@ -350,23 +357,36 @@ class ChengduMetro:
         for i, j in zip(path[:-1], path[1:]):
             cur_edge = self.G.edges[i, j]
             cur_info = (cur_edge["type"], cur_edge["line"], cur_edge["updown"])
-            if len(passing_info) == 0 or passing_info[-1] != cur_info:
-                passing_info.append(cur_info)
+            # if len(passing_info) == 0 or passing_info[-1] != cur_info:
+            passing_info.append(cur_info)
         return passing_info
 
     def compress_passing_info(self, passing_info: list[tuple[str, int, int]] = None, path: list[int] = None) -> list[
-        tuple[int, int]]:
+        str]:
         """
         Compress the passing information into a more compact form.
 
         :param passing_info: List of tuples containing link types, passing lines, and updown directions.
         :param path: List of node id. Default to None, if both provided, use passing_info first.
-        :return: Compressed list of tuples.
-            For e.g. [(line1, upd1), (line2, upd2), ...].
+        :return: Compressed list of str. For e.g. ['line1|upd1|number_of_sections1', ...].
         """
         if passing_info is None:
             passing_info = self.get_passing_info(path)
-        lines_upd = [(i[1], i[2]) for i in passing_info if i[1] != 0]
+        cur_line_sections = 0
+        last_line, last_upd = None, None
+        lines_upd = []
+
+        for tp, li, upd in passing_info:
+            if tp != "in_vehicle":
+                continue
+            if last_line is None or (li == last_line and upd == last_upd):
+                cur_line_sections += 1
+            else:
+                lines_upd.append(f"{last_line}|{last_upd}|{cur_line_sections}")
+                cur_line_sections = 1
+            last_line, last_upd = li, upd
+        else:
+            lines_upd.append(f"{last_line}|{last_upd}|{cur_line_sections}")
         return lines_upd
 
     def get_trans_cnt(self, path: list[int] = None, passing_info: list[tuple[str, int, int]] = None,
@@ -450,8 +470,9 @@ class ChengduMetro:
                     G, spur_node, cutoff=max_length - root_path_length)
 
                 if target in spur_paths and spur_paths[target]:
-                    if self._check_merge_path_feas(root_path, spur_paths[target]):
-                        total_path = root_path[:-1] + spur_paths[target]
+                    total_path = root_path[:-1] + spur_paths[target]
+                    if self._check_path_feas(total_path):
+                        # total_path = root_path[:-1] + spur_paths[target]
                         total_path_length = root_path_length + spur_paths_length[target]
 
                         if tuple(total_path) not in added_paths:
@@ -464,33 +485,40 @@ class ChengduMetro:
                 (l, _, p) = heappop(B)
                 lengths.append(l)
                 paths.append(p)
-                print(i, [self.cal_path_length(pa) for pa in paths])
+                # print(i, [self.cal_path_length(pa) for pa in paths])
             else:
                 break
 
         return lengths, paths
 
-    def _check_merge_path_feas(self, root_path: list[int], spur_path: list[int]) -> bool:
+    def _check_path_feas(self, path: list[int]) -> bool:
         """check path feasibility"""
         # 1. detour check
-        root_path_uid_list = self.get_passing_uid(root_path, merge_=True)[:-1]  # exclude spur node
-        spur_path_uid_list = self.get_passing_uid(spur_path, merge_=True)
-        for root_uid in root_path_uid_list:
-            if root_uid in spur_path_uid_list and root_uid not in [1043, 1098]:
+        # root_path_uid_list = self.get_passing_uid(root_path, merge_=True)[:-1]  # exclude spur node
+        # spur_path_uid_list = self.get_passing_uid(spur_path, merge_=True)
+        # for root_uid in root_path_uid_list:
+        #     if root_uid in spur_path_uid_list and root_uid not in [1043, 1098]:
+        #         # detour found. special care to Line 1 SiHe and Huafu Avenue.
+        #         return False
+        uid_list = self.get_passing_uid(path=path, merge_=True)
+        for i, uid in enumerate(uid_list):
+            if uid in uid_list[i + 1:] and uid not in [1043, 1098]:
                 # detour found. special care to Line 1 SiHe and Huafu Avenue.
                 return False
 
         # 2. walk detour check (platform_swap should only exist between in_vehicle links)
-        passing_info = self.get_passing_info(root_path[:-1] + spur_path)
+        passing_info = self.get_passing_info(path)
         for li1, li2 in zip(passing_info[:-1], passing_info[1:]):
             two_types = [li1[0], li2[0]]
             if "platform_swap" in two_types and ("entry" in two_types or "egress" in two_types):
                 # walk detour found
                 return False
 
-        # 3. change back to line_upd (except for line 7)
-        line_upds = self.compress_passing_info(passing_info=passing_info)
-        if len(set(line_upds)) != len(line_upds):
-            return False
+        # 3. change back to previous line_upd (except for line 7)
+        line_upd_secs = self.compress_passing_info(passing_info=passing_info)
+        line_upds = [(txt.split("|")[0], txt.split("|")[1]) for txt in line_upd_secs]
+        for i, (li, upd) in enumerate(line_upds):
+            if li != 7 and (li, upd) in line_upds[i + 1:]:  # change back to the same line_upd (except for line 7)
+                return False
 
         return True
