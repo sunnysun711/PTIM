@@ -5,6 +5,7 @@ from heapq import heappush, heappop
 from typing import Iterable
 
 import networkx as nx
+import numpy as np
 import pandas as pd
 
 from src.utils import read_data, read_platform_exceptions, file_saver, execution_timer
@@ -434,25 +435,31 @@ class ChengduMetro:
 
     def find_k_paths_via_yen(
             self, shortest_path: list[int], shortest_path_length: float, max_length: int,
-            k: int, ) -> tuple[list[float], list[list[int]]]:
+            k: int = None, ) -> tuple[list[float], list[list[int]]]:
+        """
+        Find the k shortest paths for this OD pair with the `shortest_path` as input.
+        Cut off at either `max_length` or `k`.
 
+        :param shortest_path: List of node_id for the shortest path.
+        :param shortest_path_length: Length of the shortest path.
+        :param max_length: Maximum length of the k shortest path.
+        :param k: Number of shortest paths to find. Defaults to None.
+        :return: List of tuples containing shortest path lengths and shortest paths.
+        """
         source, target = shortest_path[0], shortest_path[-1]
         lengths, paths = [shortest_path_length], [shortest_path]
         c = itertools.count()
         B = []  # all K-paths (topologically feasible)
-        c_ = itertools.count()
-        B_ = []  # all K-paths (practically feasible)
-        added_paths = []  # storing already added paths with tuple[int] representation
         G = self.G.copy()
 
-        for i in range(1, k):
+        while True:
             for j in range(len(paths[-1]) - 1):
                 spur_node = paths[-1][j]
                 root_path = paths[-1][:j + 1]
                 root_path_length = self.cal_path_length(root_path)
 
                 edges_removed = []
-                # remove all nodes connected to spur_node that are in current k-paths
+                # remove nodes connected to the spur_node in current k-paths
                 for c_path in paths:
                     if len(c_path) > j and root_path == c_path[: j + 1]:
                         to_remove_node = c_path[j + 1]
@@ -460,11 +467,10 @@ class ChengduMetro:
                                                 *G.out_edges(nbunch=to_remove_node, data=True)]:
                             edges_removed.append((u, v, edge_attr))
                 # remove all edges connecting nodes in the root path
-                for n in range(len(root_path) - 1):
-                    nodes = [root_path[n]]
-                    for (u, v, edge_attr) in [*G.in_edges(nbunch=nodes, data=True),
-                                              *G.out_edges(nbunch=nodes, data=True)]:
-                        edges_removed.append((u, v, edge_attr))
+                to_remove_nodes = [root_path[n] for n in range(len(root_path) - 1)]
+                for (u, v, edge_attr) in [*G.in_edges(nbunch=to_remove_nodes, data=True),
+                                          *G.out_edges(nbunch=to_remove_nodes, data=True)]:
+                    edges_removed.append((u, v, edge_attr))
                 G.remove_edges_from(edges_removed)
 
                 # find paths from spur_node
@@ -476,25 +482,41 @@ class ChengduMetro:
                     # calculate path length
                     total_path = root_path[:-1] + spur_paths[target]
                     total_path_length = root_path_length + spur_paths_length[target]
-                    # add to B (topologically feasible)
-                    if tuple(total_path) not in added_paths:
-                        added_paths.append(tuple(total_path))
-                        heappush(B, (total_path_length, next(c), total_path))
-                        if self._check_path_feas(total_path):  # (practically feasible)
-                            heappush(B_, (total_path_length, next(c_), total_path))
+                    heappush(B, (total_path_length, next(c), total_path))
 
                 G.add_edges_from(edges_removed)
 
             if B:
-                if B_:
-                    (l, _, p) = heappop(B_)
-                    lengths.append(l)
-                    paths.append(p)
-                    # print(i, [self.cal_path_length(pa) for pa in paths])
+                (l, _, p) = heappop(B)
+                lengths.append(l)
+                paths.append(p)
+                # print(self.get_passing_info(p))
+                # print("New path found: ", [self.cal_path_length(pa) for pa in paths])
             else:
                 break
 
-        return lengths, paths
+        # check uniqueness
+        paths_, lengths_ = [], []
+        for i, (p, p_len) in enumerate(zip(paths, lengths)):
+            if p not in paths_:
+                paths_.append(p)
+                lengths_.append(p_len)
+        # sort paths with lengths ascending
+        sorted_index = np.argsort(lengths_)
+        paths = [paths_[_] for _ in sorted_index]
+        lengths = [lengths_[_] for _ in sorted_index]
+
+        # check feasibility (practical) and save top k
+        k = k if k is not None else len(paths)
+        res_paths, res_lengths = [], []
+        for p, p_len in zip(paths, lengths):
+            if self._check_path_feas(path=p):
+                res_paths.append(p)
+                res_lengths.append(p_len)
+            if len(res_paths) >= k:
+                break
+
+        return res_lengths, res_paths
 
     def _check_path_feas(self, path: list[int]) -> bool:
         """check path feasibility"""

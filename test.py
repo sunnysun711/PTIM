@@ -9,10 +9,10 @@ from src import DATA_DIR
 
 
 def main():
-    nodes = read_data("node_info", show_timer=False)
-    links = read_data("link_info", show_timer=False)
-    # nodes = gen_node_from_sta()
-    # links = gen_links(platform_swap_time=20, entry_time=120, egress_time=120)
+    # nodes = read_data("node_info", show_timer=False)
+    # links = read_data("link_info", show_timer=False)
+    nodes = gen_node_from_sta()
+    links = gen_links(platform_swap_time=20, entry_time=60, egress_time=60)
     net = ChengduMetro(nodes, links)
 
     # net.plot_metro_net(coordinates=read_data("coordinates.csv"))
@@ -20,8 +20,8 @@ def main():
     source, target = np.random.choice(range(1001, 1137), 2)
     # source, target = 1099, 1078  # 1号线内部换乘
     # source, target = 1050, 1131  # 多条 有效路径，用于检验yen算法的求解效果
-    source, target = 1088, 1118  # 西南财大 -> 骡马市 -> 火车南站 -> 神仙树
-    # source, target = 1092, 1117
+    # source, target = 1088, 1118  # 西南财大 -> 骡马市 -> 火车南站 -> 神仙树
+    # source, target = 1131, 1029
     sta_dict = pd.read_pickle(os.path.join(DATA_DIR, "STA.pkl")) \
         .drop_duplicates(subset="STATION_UID") \
         .reset_index().set_index("STATION_UID")['STATION_NAME'].to_dict()
@@ -37,7 +37,7 @@ def main():
     # trans_cnt = net.get_trans_cnt(passing_info_compact=pass_info_compact)
     # print("Number of transfers: ", trans_cnt)
 
-    max_length = min(length * 2, length + 1200)
+    max_length = min(length * 1.6, length + 600)
     print(max_length)
     # paths = nx.all_simple_paths(net.G, source, target, cutoff=max_length)
     #
@@ -50,14 +50,13 @@ def main():
     )
     for le, pa in zip(lens, paths):
         print(le, net.compress_passing_info(path=pa))
-        # print(pa)
     # print("K-paths", [net.compress_passing_info(net.get_passing_info(pa)) for pa in paths])
-    print(
-        net.cal_path_length(
-            path=[1088, 104270, 104280, 104290, 104300, 104310, 1016, 101250, 101260, 101270, 101280, 101290, 101300,
-                  101310, 101320, 1063, 107370, 107380, 1118]
-        )
-    )
+    # print(
+    #     net.cal_path_length(
+    #         path=[1088, 104270, 104280, 104290, 104300, 104310, 1016, 101250, 101260, 101270, 101280, 101290, 101300,
+    #               101310, 101320, 1063, 107370, 107380, 1118]
+    #     )
+    # )
 
     pass
 
