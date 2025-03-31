@@ -3,3 +3,4 @@
 /.venv/
 /.idea/
 diff.txt
+src/__pycache__/

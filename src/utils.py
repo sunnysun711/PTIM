@@ -4,7 +4,7 @@ import time
 
 import pandas as pd
 
-DATA_DIR = "data//cd"
+from src import DATA_DIR
 
 
 def execution_timer(func):
@@ -45,7 +45,7 @@ def file_saver(func):
             print(res.sample(n=10))
             res.info()
 
-            full_fn = f"./data/cd/{save_fn}.pkl"
+            full_fn = fr"{DATA_DIR}/{save_fn}.pkl"
             res.to_pickle(full_fn)
             print(f"{full_fn} saved.")
 
@@ -55,7 +55,7 @@ def file_saver(func):
 
 
 @execution_timer  # ~ 0.1433 seconds for AFC
-def read_data(fn: str = "AFC", show_timer: bool = False) -> pd.DataFrame | dict | list:
+def read_data(fn: str = "AFC", show_timer: bool = False, drop_cols: bool = True) -> pd.DataFrame | dict | list:
     """Read data file and drop specific columns based on file name."""
     if fn.endswith(".csv"):
         df = pd.read_csv(f"{DATA_DIR}//{fn}")
@@ -67,14 +67,15 @@ def read_data(fn: str = "AFC", show_timer: bool = False) -> pd.DataFrame | dict 
     else:
         df = pd.read_pickle(f"{DATA_DIR}//{fn}.pkl")
 
-    if fn == "AFC":
-        df = df.drop(columns=["STATION1_NID", "STATION2_NID", "STATION1_TIME", "STATION2_TIME"])
-    elif fn == "STA":
-        df = df.drop(columns=["STATION_NAME", "STATION_NAME_E"])
-    elif fn == "TT":
-        df = df.drop(
-            columns=["TRAIN_NUMBER", "STATION_NAME", "O_STATION", "T_STATION", "ARRIVE_TIME", "DEPARTURE_TIME",
-                     "TRAIN_ID_old"])
+    if drop_cols:
+        if fn == "AFC":
+            df = df.drop(columns=["STATION1_NID", "STATION2_NID", "STATION1_TIME", "STATION2_TIME"])
+        elif fn == "STA":
+            df = df.drop(columns=["STATION_NAME", "STATION_NAME_E"])
+        elif fn == "TT":
+            df = df.drop(
+                columns=["TRAIN_NUMBER", "STATION_NAME", "O_STATION", "T_STATION", "ARRIVE_TIME", "DEPARTURE_TIME",
+                         "TRAIN_ID_old"])
     return df
 
 
