@@ -1,4 +1,6 @@
 import os
+import time
+
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -8,14 +10,12 @@ from src.utils import read_data
 from src import DATA_DIR
 
 
-def main():
-    # nodes = read_data("node_info", show_timer=False)
-    # links = read_data("link_info", show_timer=False)
-    nodes = gen_node_from_sta()
-    links = gen_links(platform_swap_time=20, entry_time=60, egress_time=60)
+def test_k_paths():
+    nodes = read_data("node_info", show_timer=False)
+    links = read_data("link_info", show_timer=False)
+    # nodes = gen_node_from_sta()
+    # links = gen_links(platform_swap_time=20, entry_time=60, egress_time=60)
     net = ChengduMetro(nodes, links)
-
-    # net.plot_metro_net(coordinates=read_data("coordinates.csv"))
 
     source, target = np.random.choice(range(1001, 1137), 2)
     # source, target = 1099, 1078  # 1号线内部换乘
@@ -30,33 +30,33 @@ def main():
 
     length, s_path = nx.single_source_dijkstra(net.G, source=source, target=target)
     print(length, s_path)
-    # pass_info = net.get_passing_info(path)
-    # print(pass_info)
-    # pass_info_compact = net.compress_passing_info(pass_info)
-    # print(pass_info_compact)
-    # trans_cnt = net.get_trans_cnt(passing_info_compact=pass_info_compact)
-    # print("Number of transfers: ", trans_cnt)
 
     max_length = min(length * 1.6, length + 600)
     print(max_length)
-    # paths = nx.all_simple_paths(net.G, source, target, cutoff=max_length)
-    #
-    # print(*paths)
-
-    # net.find_all_pairs_k_paths()
 
     lens, paths = net.find_k_paths_via_yen(
-        shortest_path=s_path, shortest_path_length=length, max_length=max_length, k=20
+        shortest_path=s_path, shortest_path_length=length, max_length=max_length
     )
     for le, pa in zip(lens, paths):
         print(le, net.compress_passing_info(path=pa))
-    # print("K-paths", [net.compress_passing_info(net.get_passing_info(pa)) for pa in paths])
-    # print(
-    #     net.cal_path_length(
-    #         path=[1088, 104270, 104280, 104290, 104300, 104310, 1016, 101250, 101260, 101270, 101280, 101290, 101300,
-    #               101310, 101320, 1063, 107370, 107380, 1118]
-    #     )
-    # )
+
+    return
+
+
+def main():
+    a = time.time()
+    nodes = read_data("node_info", show_timer=False)
+    links = read_data("link_info", show_timer=False)
+    # nodes = gen_node_from_sta()
+    # links = gen_links(platform_swap_time=20, entry_time=60, egress_time=60)
+    net = ChengduMetro(nodes, links)
+    # print(net.G.edges[102360, 102370])
+    df_p, df_pv = net.find_all_pairs_k_paths()
+    print(time.time() - a)
+
+    print(df_p)
+    print(df_pv)
+    # net.plot_metro_net(coordinates=read_data("coordinates.csv"))
 
     pass
 

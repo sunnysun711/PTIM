@@ -362,8 +362,33 @@ class ChengduMetro:
             passing_info.append(cur_info)
         return passing_info
 
-    def compress_passing_info(self, passing_info: list[tuple[str, int, int]] = None, path: list[int] = None) -> list[
-        str]:
+    def get_path_via(self, path: list[int], path_id: int) -> list[list]:
+        """
+
+        """
+        passing_info_arr = []
+        cur_line_first_sec = None
+        cur_line_first_node = 0
+        for i, j in zip(path[:-1], path[1:]):
+            cur_edge = self.G.edges[i, j]
+            if cur_edge["type"] != "in_vehicle":
+                if cur_line_first_sec is not None:
+                    passing_info_arr.append(
+                        [path_id, cur_line_first_node, i, cur_line_first_sec["type"], cur_line_first_sec["line"],
+                         cur_line_first_sec["updown"]])
+                    cur_line_first_sec = None
+                passing_info_arr.append([path_id, i, j, cur_edge["type"], cur_edge["line"], cur_edge["updown"]])
+            else:
+                if cur_line_first_sec is None:
+                    cur_line_first_sec = cur_edge
+                    cur_line_first_node = i
+
+        return passing_info_arr
+
+    def compress_passing_info(
+            self,
+            passing_info: list[tuple[str, int, int]] = None,
+            path: list[int] = None) -> list[str]:
         """
         Compress the passing information into a more compact form.
 
@@ -390,8 +415,10 @@ class ChengduMetro:
             lines_upd.append(f"{last_line}|{last_upd}|{cur_line_sections}")
         return lines_upd
 
-    def get_trans_cnt(self, path: list[int] = None, passing_info: list[tuple[str, int, int]] = None,
-                      passing_info_compact: list[tuple[int, int]] = None) -> int:
+    def get_trans_cnt(self,
+                      path: list[int] = None,
+                      passing_info: list[tuple[str, int, int]] = None,
+                      passing_info_compact: list[str] = None) -> int:
         """Get transfer count from either path, passing_info or passing_info_compact."""
         if passing_info_compact is not None:
             lines_upd = passing_info_compact
@@ -404,46 +431,19 @@ class ChengduMetro:
             raise ValueError("At least one of path, passing_info, or passing_info_compact must be provided.")
         return len(lines_upd) - 1
 
-    def find_all_pairs_k_paths(self, k: int = 8, theta1: float = 0.6, theta2: float = 600, ):
-        """
-        Find k shortest paths for all OD pairs (only ground nodes).
-
-        :param k: Number of shortest paths to find. Defaults to 8.
-        :param theta1: Parameter for path selection. Defaults to 0.6.
-        :param theta2: Parameter for path selection. Defaults to 600.
-        """
-
-        uid_list = self._get_uids()  # all ground nodes
-        for o_uid in uid_list:
-            # get all nodes shortest paths with source as o_uid
-            lengths, s_paths = nx.single_source_dijkstra(G=self.G, source=o_uid)
-            for d_uid in uid_list:
-                if o_uid == d_uid:
-                    continue
-                shortest_path = s_paths[d_uid]
-                shortest_path_length = lengths[d_uid]
-
-                max_path_length = min(shortest_path_length * (1 + theta1), shortest_path_length + theta2)
-
-                print(shortest_path, shortest_path_length, max_path_length)
-
-                # ！不可以用 <nx.all_simple_paths> 和 max_path_length 作为 cutoff 来生成k短路，计算太慢。
-                # Ref: https://blog.csdn.net/sheyueyu/article/details/133774669
-                # 在我的方法中，只移除 in_vehicle 弧，进出站、换站台都【不可】被移除。
-
-        ...
-
     def find_k_paths_via_yen(
-            self, shortest_path: list[int], shortest_path_length: float, max_length: int,
-            k: int = None, ) -> tuple[list[float], list[list[int]]]:
+            self,
+            shortest_path: list[int],
+            shortest_path_length: float,
+            max_length: float,
+    ) -> tuple[list[float], list[list[int]]]:
         """
-        Find the k shortest paths for this OD pair with the `shortest_path` as input.
+        Find the k shortest paths for this OD pair with `shortest_path` as input.
         Cut off at either `max_length` or `k`.
 
         :param shortest_path: List of node_id for the shortest path.
         :param shortest_path_length: Length of the shortest path.
         :param max_length: Maximum length of the k shortest path.
-        :param k: Number of shortest paths to find. Defaults to None.
         :return: List of tuples containing shortest path lengths and shortest paths.
         """
         source, target = shortest_path[0], shortest_path[-1]
@@ -507,14 +507,11 @@ class ChengduMetro:
         lengths = [lengths_[_] for _ in sorted_index]
 
         # check feasibility (practical) and save top k
-        k = k if k is not None else len(paths)
         res_paths, res_lengths = [], []
         for p, p_len in zip(paths, lengths):
             if self._check_path_feas(path=p):
                 res_paths.append(p)
                 res_lengths.append(p_len)
-            if len(res_paths) >= k:
-                break
 
         return res_lengths, res_paths
 
@@ -549,3 +546,67 @@ class ChengduMetro:
                 return False
 
         return True
+
+    def find_all_pairs_k_paths(
+            self,
+            k: int = 10,
+            theta1: float = 0.6,
+            theta2: float = 600,
+            transfer_deviation: int = 2,
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Find the k shortest paths for all OD pairs (only ground nodes).
+
+        :param k: Number of shortest paths to find. Default to 10.
+        :param theta1: Parameter for path selection. Default to 0.6.
+        :param theta2: Parameter for path selection. Default to 600.
+        :param transfer_deviation: Transfer deviation from the trans_cnt of shortest_path. Default to 2.
+        :return: Path and pathvia dataframes.
+        """
+        path_list: list[list] = []
+        pathvia_list: list[list] = []
+
+        uid_list = self._get_uids()  # all ground nodes
+        for o_uid in uid_list:
+            # get all nodes shortest paths with source as o_uid
+            s_lengths, s_paths = nx.single_source_dijkstra(G=self.G, source=o_uid)
+            for d_uid in uid_list:
+                if o_uid == d_uid:
+                    continue
+
+                # for testing
+                # o_uid, d_uid = np.random.choice(range(1001, 1137), size=2)
+
+                print(f"{o_uid}->{d_uid}", end="\t")
+                shortest_path = s_paths[d_uid]
+                shortest_path_length = s_lengths[d_uid]
+                max_path_length = min(shortest_path_length * (1 + theta1), shortest_path_length + theta2)
+                lengths, paths = self.find_k_paths_via_yen(
+                    shortest_path=shortest_path, shortest_path_length=shortest_path_length,
+                    max_length=max_path_length
+                )
+
+                # check transfer count and select top k paths
+                transfers = [self.get_trans_cnt(pa) for pa in paths]
+                max_transfers = min(transfers) + transfer_deviation
+                k_ = 0
+                base_path_id = int(f"{o_uid}{d_uid}00")
+                for transfer, length, path in zip(transfers, lengths, paths):
+                    if transfer <= max_transfers:
+                        k_ += 1
+                        path_id = base_path_id + k_
+                        path_list.append(
+                            [path_id, length, transfer, "_".join(self.compress_passing_info(path=path))]
+                        )
+                        pv = self.get_path_via(path=path, path_id=path_id)
+                        pathvia_list.extend(pv)
+                    if k_ >= k:
+                        break
+            print()
+
+            # for testing
+            # break
+
+        df_p = pd.DataFrame(path_list, columns=["path_id", "length", "transfer_cnt", "path_str"])
+        df_pv = pd.DataFrame(pathvia_list, columns=["path_id", "node_id1", "node_id2", "link_type", "line", "updown"])
+        return df_p, df_pv
