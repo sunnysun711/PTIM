@@ -177,8 +177,21 @@ def gen_links(platform_swap_time: float = 3,
               egress_time: float = 15,
               save_fn: str = None) -> pd.DataFrame:
     """
+    Generate the links (train and walk) between metro nodes.
 
-    :param save_fn:
+    This function combines the train links generated from the timetable (`gen_train_links_from_tt`) and walk links
+    between nodes (`gen_walk_links_from_nodes`). It creates a unified DataFrame that contains information about all
+    the possible links in the metro network, including train (in-vehicle) and walk (entry, egress, platform swap) links.
+
+    - Train links are created based on the timetable and include information like the time taken for a train to travel
+      between two stations.
+    - Walk links are generated based on the nodes' relationships, representing entry, egress, and platform swap times
+      between platforms or platforms and station gates.
+
+    :param platform_swap_time: The time taken to swap platforms, default is 3 seconds.
+    :param entry_time: The time taken to walk from station gates to the platforms, default is 15 seconds.
+    :param egress_time: The time taken to walk from a platform to the station gates, default is 15 seconds.
+    :param save_fn: The file path to save the generated links, if provided. This parameter is optional.
     :return: Dataframe of columns ['node_id1', 'node_id2', 'link_type', 'link_weight'].
     """
     train_links = gen_train_links_from_tt().reset_index().drop(columns=["count"])
@@ -364,20 +377,44 @@ class ChengduMetro:
 
     def get_path_via(self, path: list[int], path_id: int) -> list[list]:
         """
+        Generate path via information for a given path in the metro network.
 
+        This function processes a given path (list of node IDs) and generates a list of segments along the path,
+        where each segment is described by the link type (e.g., entry, egress, platform_swap, in_vehicle), the passing
+        line, and the direction (up/down). The path is divided into sections based on the type of link, and each section
+        is assigned a unique pathvia ID (`pv_id`) for sorting purposes.
+
+        The function creates a list of passing information for the given path by iterating through consecutive nodes
+        and adding the appropriate information for each link between them.
+
+        :param path: A list of node IDs representing the path through the metro network.
+        :param path_id: A unique identifier for the path, used for sorting and distinguishing between different paths.
+
+        :return: A list of lists, where each inner list represents a segment of the path and contains the following
+            information:
+            - : The unique ID for the path.
+            - : The pathvia ID, used for sorting the segments.
+            - : The starting node ID of the segment.
+            - : The ending node ID of the segment.
+            - : The type of the link (e.g., "entry", "egress", "platform_swap", "in_vehicle").
+            - : The line number associated with the segment.
+            - : The direction of the link (1 for upward, -1 for downward).
         """
         passing_info_arr = []
         cur_line_first_sec = None
         cur_line_first_node = 0
+        pv_id = 1  # pathvia id for sorting the segments
         for i, j in zip(path[:-1], path[1:]):
             cur_edge = self.G.edges[i, j]
             if cur_edge["type"] != "in_vehicle":
                 if cur_line_first_sec is not None:
                     passing_info_arr.append(
-                        [path_id, cur_line_first_node, i, cur_line_first_sec["type"], cur_line_first_sec["line"],
+                        [path_id, pv_id, cur_line_first_node, i, cur_line_first_sec["type"], cur_line_first_sec["line"],
                          cur_line_first_sec["updown"]])
+                    pv_id += 1
                     cur_line_first_sec = None
-                passing_info_arr.append([path_id, i, j, cur_edge["type"], cur_edge["line"], cur_edge["updown"]])
+                passing_info_arr.append([path_id, pv_id, i, j, cur_edge["type"], cur_edge["line"], cur_edge["updown"]])
+                pv_id += 1
             else:
                 if cur_line_first_sec is None:
                     cur_line_first_sec = cur_edge
@@ -518,12 +555,6 @@ class ChengduMetro:
     def _check_path_feas(self, path: list[int]) -> bool:
         """check path feasibility"""
         # 1. detour check
-        # root_path_uid_list = self.get_passing_uid(root_path, merge_=True)[:-1]  # exclude spur node
-        # spur_path_uid_list = self.get_passing_uid(spur_path, merge_=True)
-        # for root_uid in root_path_uid_list:
-        #     if root_uid in spur_path_uid_list and root_uid not in [1043, 1098]:
-        #         # detour found. special care to Line 1 SiHe and Huafu Avenue.
-        #         return False
         uid_list = self.get_passing_uid(path=path, merge_=True)
         for i, uid in enumerate(uid_list):
             if uid in uid_list[i + 1:] and uid not in [1043, 1098]:
@@ -535,7 +566,6 @@ class ChengduMetro:
         for li1, li2 in zip(passing_info[:-1], passing_info[1:]):
             two_types = [li1[0], li2[0]]
             if "platform_swap" in two_types and ("entry" in two_types or "egress" in two_types):
-                # walk detour found
                 return False
 
         # 3. change back to previous line_upd (except for line 7)
@@ -574,9 +604,6 @@ class ChengduMetro:
                 if o_uid == d_uid:
                     continue
 
-                # for testing
-                # o_uid, d_uid = np.random.choice(range(1001, 1137), size=2)
-
                 print(f"{o_uid}->{d_uid}", end="\t")
                 shortest_path = s_paths[d_uid]
                 shortest_path_length = s_lengths[d_uid]
@@ -604,9 +631,7 @@ class ChengduMetro:
                         break
             print()
 
-            # for testing
-            # break
-
         df_p = pd.DataFrame(path_list, columns=["path_id", "length", "transfer_cnt", "path_str"])
-        df_pv = pd.DataFrame(pathvia_list, columns=["path_id", "node_id1", "node_id2", "link_type", "line", "updown"])
+        df_pv = pd.DataFrame(
+            pathvia_list, columns=["path_id", "pv_id", "node_id1", "node_id2", "link_type", "line", "updown"])
         return df_p, df_pv
