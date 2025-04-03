@@ -2,8 +2,10 @@
 Please make sure path.pkl and pathvia.pkl are already generated.
 """
 import numpy as np
+import pandas as pd
+from tqdm import tqdm
 
-from src.utils import read_data
+from src.utils import read_data, file_saver
 from src.globals import K_PV_DICT, TT, AFC
 
 
@@ -89,13 +91,31 @@ def find_feas_iti(k_pv: np.ndarray, ts1: int, ts2: int) -> list[list[int | tuple
     return feas_iti_list
 
 
+@file_saver
+def find_feas_iti_all(save_fn: str = None) -> pd.DataFrame:
+    structured_data = []
+    for rid, uid1, ts1, uid2, ts2 in tqdm(AFC, total=AFC.shape[0], desc="Processing passengers"):
+        k_pv = K_PV_DICT[(uid1, uid2)]
+        iti_list = find_feas_iti(k_pv, ts1, ts2)
+        for iti_id, itinerary in enumerate(iti_list, start=1):
+            path_id = itinerary[0]
+            for seg_id, (train_id, board_ts, alight_ts) in enumerate(itinerary[1:], start=1):
+                structured_data.append([rid, iti_id, path_id, seg_id, train_id, board_ts, alight_ts])
+    df = pd.DataFrame(
+        structured_data,
+        columns=['rid', 'iti_id', 'path_id', 'seg_id', 'train_id', 'board_ts', 'alight_ts'])
+    df = df.astype({
+        'rid': 'int32',
+        'iti_id': 'int32',
+        'path_id': 'int32',
+        'seg_id': 'int32',
+        'train_id': 'int32',
+        'board_ts': 'int32',
+        'alight_ts': 'int32'
+    })
+    return df
+
+
 if __name__ == '__main__':
-    # rid, uid1, ts1, uid2, ts2 = AFC[np.random.choice(len(AFC))]
-    rid, uid1, ts1, uid2, ts2 = AFC[AFC[:, 0] == 105057].flatten()
-    print(rid, uid1, uid2, ts1, ts2)
-
-    k_pv = K_PV_DICT[(uid1, uid2)]
-    print(k_pv)
-
-    print(find_feas_iti(k_pv, ts1, ts2))
+    find_feas_iti_all()
     pass
