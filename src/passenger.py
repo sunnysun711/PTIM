@@ -93,16 +93,31 @@ def find_feas_iti(k_pv: np.ndarray, ts1: int, ts2: int) -> list[list[int | tuple
 
 @file_saver
 def find_feas_iti_all(save_fn: str = None) -> pd.DataFrame:
-    structured_data = []
-    for rid, uid1, ts1, uid2, ts2 in tqdm(AFC, total=AFC.shape[0], desc="Processing passengers"):
+    data = []
+    for rid, uid1, ts1, uid2, ts2 in tqdm(AFC, total=AFC.shape[0], desc="Finding feasible itineraries"):
         k_pv = K_PV_DICT[(uid1, uid2)]
         iti_list = find_feas_iti(k_pv, ts1, ts2)
         for iti_id, itinerary in enumerate(iti_list, start=1):
             path_id = itinerary[0]
             for seg_id, (train_id, board_ts, alight_ts) in enumerate(itinerary[1:], start=1):
-                structured_data.append([rid, iti_id, path_id, seg_id, train_id, board_ts, alight_ts])
+                data.append([rid, iti_id, path_id, seg_id, train_id, board_ts, alight_ts])
+
+    @file_saver
+    def _save_rids_not_found(save_fn: str = None) -> pd.DataFrame:
+        # process not found passengers
+        rids_not_found = AFC[np.isin(AFC[:, 0, [seg[0] for seg in data]])]
+        df_rids_not_found = pd.DataFrame(
+            rids_not_found,
+            columns=['rid', 'uid1', 'ts1', 'uid2', 'ts2']
+        )
+        print(f"Not found feasible itinerary: {len(rids_not_found)} passengers.")
+        return df_rids_not_found
+
+    _save_rids_not_found(save_fn="AFC_feas_iti_not_found")
+
+    # save feasible itineraries to file with pandas DataFrame
     df = pd.DataFrame(
-        structured_data,
+        data,
         columns=['rid', 'iti_id', 'path_id', 'seg_id', 'train_id', 'board_ts', 'alight_ts'])
     df = df.astype({
         'rid': 'int32',
@@ -117,5 +132,5 @@ def find_feas_iti_all(save_fn: str = None) -> pd.DataFrame:
 
 
 if __name__ == '__main__':
-    find_feas_iti_all()
+    find_feas_iti_all(save_fn="feas_iti")
     pass
