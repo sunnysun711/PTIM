@@ -1,5 +1,5 @@
-numpy~=1.26.3
-pandas~=2.1.4
-networkx~=3.4.2
+numpy
+pandas
+networkx
 matplotlib
-tqdm~=4.65.0
+tqdm

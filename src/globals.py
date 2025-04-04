@@ -64,14 +64,6 @@ def build_tt() -> np.ndarray[int]:
     return tt_df[["TRAIN_ID", "STATION_NID", "LINE_NID", "UPDOWN", "ts1", "DEPARTURE_TS"]].values
 
 
-def get_afc() -> np.ndarray[int]:
-    """
-    Read and load AFC data.
-
-    :return: np.ndarray: Array of shape (n, 5) with columns:
-        ["RID", "O_UID", "TS1", "D_UID", "TS2"]
-    """
-
 # ---------------------------
 # Public, frequently used variables (read-only across the project)
 # ---------------------------
