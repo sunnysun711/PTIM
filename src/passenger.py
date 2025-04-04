@@ -93,8 +93,20 @@ def find_feas_iti(k_pv: np.ndarray, ts1: int, ts2: int) -> list[list[int | tuple
 
 @file_saver
 def find_feas_iti_all(save_fn: str = None) -> pd.DataFrame:
+    """
+    Main function to find feasible itineraries for all passengers and save results.
+    This function will generate two dataframes:
+        1. AFC_feas_iti_not_found.pkl: records of passengers without feasible itineraries.
+            (Could be empty, if empty, not saved.)
+        2. feas_iti.pkl: feasible itineraries for all passengers. (with the returned df structure)
+
+    :return: pd.DataFrame containing feasible itineraries.
+        columns: ['rid', 'iti_id', 'path_id','seg_id', 'train_id', 'board_ts', 'alight_ts']
+    """
     data = []
-    for rid, uid1, ts1, uid2, ts2 in tqdm(AFC, total=AFC.shape[0], desc="Finding feasible itineraries"):
+    # for rid, uid1, ts1, uid2, ts2 in tqdm(AFC, total=AFC.shape[0], desc="Finding feasible itineraries"):
+    # todo: test!!
+    for rid, uid1, ts1, uid2, ts2 in AFC[:100]:
         k_pv = K_PV_DICT[(uid1, uid2)]
         iti_list = find_feas_iti(k_pv, ts1, ts2)
         for iti_id, itinerary in enumerate(iti_list, start=1):
@@ -103,9 +115,12 @@ def find_feas_iti_all(save_fn: str = None) -> pd.DataFrame:
                 data.append([rid, iti_id, path_id, seg_id, train_id, board_ts, alight_ts])
 
     @file_saver
-    def _save_rids_not_found(save_fn: str = None) -> pd.DataFrame:
-        # process not found passengers
-        rids_not_found = AFC[np.isin(AFC[:, 0, [seg[0] for seg in data]])]
+    def _save_rids_not_found(save_fn: str = None) -> pd.DataFrame | None:
+        """Helper function to save records of passengers without feasible itineraries."""
+        if not data:
+            print("All passengers have feasible itineraries.")
+            return None
+        rids_not_found = AFC[~np.isin(AFC[:, 0], [seg[0] for seg in data])]
         df_rids_not_found = pd.DataFrame(
             rids_not_found,
             columns=['rid', 'uid1', 'ts1', 'uid2', 'ts2']
@@ -132,5 +147,7 @@ def find_feas_iti_all(save_fn: str = None) -> pd.DataFrame:
 
 
 if __name__ == '__main__':
-    find_feas_iti_all(save_fn="feas_iti")
+    # find_feas_iti_all(save_fn="feas_iti")
+    find_feas_iti_all()
+
     pass

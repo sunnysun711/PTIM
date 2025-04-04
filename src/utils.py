@@ -30,7 +30,22 @@ def execution_timer(func):
 
 
 def file_saver(func):
-    """File saver decorator, saving .pkl files with `save_fn` parameter."""
+    """File saver decorator that automatically saves function results to pickle files.
+
+    Decorator that wraps a function returning a pandas DataFrame/object and:
+    - Optionally saves the result to a .pkl file when 'save_fn' parameter is provided
+    - Provides sample output and memory usage info before saving
+    - Handles empty/None results gracefully
+
+    Usage:
+        @file_saver
+        def my_func(..., save_fn=None):
+            # returns a DataFrame
+            return df
+
+        >>> my_func(save_fn="my_data")
+        # saves to my_data.pkl
+    """
 
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
@@ -41,6 +56,9 @@ def file_saver(func):
         res = func(*args, **kwargs)
 
         if save_fn:
+            if res is None:
+                print(f"{save_fn} is empty. Skipping saving.")
+                return res
             # display saving dataframe
             print(res.sample(n=10))
             res.info()
