@@ -179,16 +179,6 @@ def plot_seg_trains(k_pv: np.ndarray, ts1: int, ts2: int):
             for train in trains:
                 ax.plot([train[1], train[2]], [seg_id, seg_id + 1], lw=1, color=line_colors.get(line, 'blue'))
 
-    #
-    # for i, (path_id, seg_trains) in enumerate(path_id_seg_trains.items()):
-    #     ax = axs[i]
-    #     ax.set_title(f"Path ID: {path_id}")
-    #     ax.set_ylabel("Stations")
-    #     ax.set_yticks(range(1, len(seg_trains) + 1))
-    #     ax.set_yticklabels([f"Seg {j}" for j in range(1, len(seg_trains) + 1)])
-    #     for j, trains in enumerate(seg_trains):
-    #         for train in trains:
-    #             ax.broken_barh([(train[1], train[2] - train[1])], (j + 0.5, 0.5), facecolors='blue', alpha=0.3)
     plt.tight_layout()
     plt.show()
     return
@@ -242,8 +232,8 @@ def find_feas_iti_all(save_fn: str = None) -> pd.DataFrame:
         'rid': 'int32',
         'iti_id': 'int32',
         'path_id': 'int32',
-        'seg_id': 'int32',
-        'train_id': 'int32',
+        'seg_id': 'int8',
+        'train_id': 'category',
         'board_ts': 'int32',
         'alight_ts': 'int32'
     })
@@ -254,7 +244,10 @@ def find_feas_iti_all(save_fn: str = None) -> pd.DataFrame:
 def _test_find_feas_iti():
     """Test function for find_feas_iti."""
     # rid, uid1, ts1, uid2, ts2 = AFC[np.random.choice(len(AFC))].flatten().tolist()
-    rid, uid1, ts1, uid2, ts2 = AFC[AFC[:, 0] == 505630].flatten().tolist()
+    # rid = 505630  # 1349
+    rid = 6078
+    rid, uid1, ts1, uid2, ts2 = AFC[AFC[:, 0] == rid].flatten().tolist()
+    # ts1, ts2 = 20000, 23000
     print(rid, uid1, uid2, ts1, ts2)
 
     k_pv = K_PV_DICT[(uid1, uid2)]
