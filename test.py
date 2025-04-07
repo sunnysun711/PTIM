@@ -44,19 +44,20 @@ def test_k_paths():
 
 
 def main():
-    a = time.time()
-    nodes = read_data("node_info", show_timer=False)
-    links = read_data("link_info", show_timer=False)
-    # nodes = gen_node_from_sta()
-    # links = gen_links(platform_swap_time=20, entry_time=60, egress_time=60)
-    net = ChengduMetro(nodes, links)
-    # print(net.G.edges[102360, 102370])
-    df_p, df_pv = net.find_all_pairs_k_paths()
-    print(time.time() - a)
+    import matplotlib
+    matplotlib.use('TkAgg')
+    import matplotlib.pyplot as plt
 
-    print(df_p)
-    print(df_pv)
-    # net.plot_metro_net(coordinates=read_data("coordinates.csv"))
+    fi = read_data("feas_iti")
+    df_feas_cnt = fi.drop_duplicates(["rid"], keep="last")
+
+    plt.hist(df_feas_cnt['iti_id'], bins=5000, color='steelblue', alpha=0.7, edgecolor='black')
+    plt.xlabel('iti_id')
+    plt.xlim([-100, 2000])
+    plt.ylabel('Frequency')
+    plt.title('Distribution of iti_id')
+    plt.grid(True)
+    plt.show()
 
     pass
 

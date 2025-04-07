@@ -1,7 +1,7 @@
 # 接下来的思路
 
 ## 文件管理
-- feas_iti这个文件不动，首先根据iti的数量进行筛选，产生feas_iti_stashed.pkl (iti数量大于500)、feas_iti_assigned.pkl (已分配的)、feas_iti_left.pkl (还未分配的）。三个文件应该字段完全一致（除了已分配的文件需要增加一个字段来表示是第几次分配得到的结果）。
+- feas_iti这个文件不动，首先根据iti的数量进行筛选，产生feas_iti_stashed.pkl (iti数量大于500)、feas_iti_assigned.pkl (已分配的)、feas_iti_left.pkl (还未分配的）。三个文件应该字段完全一致，其中feas_iti_assigned应该存在多个文件，由后缀_1, _2, _3等表示第几次分配得到的结果。另外存在一个iti_prob.parquet文件，存储每个(rid, iti_id)组合的概率，每一次更新计算就增加一列。
 
 - 步行时间分布计算：不仅仅是唯一可行乘车方案的乘客来统计步行时间，还有所有可行乘车方案中最后一个seg的train都是同一列车的乘客，也可以拿来统计步行时间。所以本质上来说，对于feas_iti这个文件来说，应该是：“同一rid下的所有iti中最后一个seg列车train id相同的”，这些都可以拿来做步行时间分布计算。
 
