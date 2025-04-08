@@ -43,7 +43,7 @@ def test_k_paths():
     return
 
 
-def main():
+def plot_feas_iti_cnt():
     import matplotlib
     matplotlib.use('TkAgg')
     import matplotlib.pyplot as plt
@@ -58,6 +58,10 @@ def main():
     plt.title('Distribution of iti_id')
     plt.grid(True)
     plt.show()
+    return
+
+
+def main():
 
     pass
 

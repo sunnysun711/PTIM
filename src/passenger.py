@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from src.utils import read_data, file_saver
+from src.utils import read_data, file_saver, ts2tstr
 from src.globals import K_PV_DICT, TT, AFC
 
 
@@ -132,17 +132,46 @@ def plot_seg_trains(k_pv: np.ndarray, ts1: int, ts2: int):
         10: '#1010A4',
     }
 
-    # plot
+    # Determine the number of rows and columns based on the number of items
+    num_plots = len(path_id_seg_trains)
+    ncols = 2 if num_plots > 4 else 1
+    nrows = (num_plots + 1) // ncols if num_plots > 4 else num_plots  # Ensure enough rows for all subplots
+
+    # Plot with dynamic subplots
     fig, axs = plt.subplots(
-        nrows=len(path_id_seg_trains),
-        ncols=1,
-        figsize=(10, 3 * len(path_id_seg_trains)),
+        nrows=nrows,
+        ncols=ncols,
+        figsize=(8 * ncols, 2.5 * nrows),
         sharex=True
     )
-    if len(path_id_seg_trains) == 1:
+
+    if num_plots == 1:
         axs = [axs]  # Make sure axs is iterable even if there's only one subplot
-    axs[-1].set_xlabel("Time")
-    axs[-1].set_xlim([ts1, ts2])
+
+    # Calculate xticks (every 10 minutes between ts1 and ts2)
+    xticks = list(range(ts1 // 600 * 600 + 600, ts2 // 600 * 600 + 600, 600))  # 600 seconds = 10 minutes
+    xticklabels = [ts2tstr(t, include_seconds=False) for t in xticks]
+
+    # Add ts1 and ts2 to the xticks list and labels
+    xticks = [ts1] + xticks + [ts2]
+    xticklabels = [ts2tstr(ts1, include_seconds=True)] + xticklabels + [ts2tstr(ts2, include_seconds=True)]
+
+    if ncols == 1:
+        axs[-1].set_xlabel("Time")
+        axs[-1].set_xlim([ts1, ts2])
+        axs[-1].set_xticks(xticks)
+        axs[-1].set_xticklabels(xticklabels)
+        axs[-1].tick_params(axis='x', labelrotation=45)
+    else:
+        for i in range(ncols):
+            axs[-1, i].set_xlabel("Time")
+            axs[-1, i].set_xlim([ts1, ts2])
+            axs[-1, i].set_xticks(xticks)
+            axs[-1, i].set_xticklabels(xticklabels)
+            axs[-1, i].tick_params(axis='x', labelrotation=45)
+
+    # Flatten axs for easier indexing if multiple columns
+    axs = axs.flatten()
 
     # Loop through each path_id and plot the corresponding subgraph
     for i, (path_id, seg_trains) in enumerate(path_id_seg_trains.items()):
@@ -163,21 +192,22 @@ def plot_seg_trains(k_pv: np.ndarray, ts1: int, ts2: int):
         yticks = []
         ytick_labels = []
         for i in range(len(pv)):
-            yticks.append(i+0.1)
-            yticks.append(i+0.5)
-            yticks.append(i+0.9)
+            yticks.append(i + 0.1)
+            yticks.append(i + 0.5)
+            yticks.append(i + 0.9)
             ytick_labels.append(f"{pv[i, 1]}")
             ytick_labels.append(f"({pv[i, 3]}, {pv[i, 4]})")
             ytick_labels.append(f"{pv[i, 2]}")
         ax.set_yticks(yticks)
         ax.set_yticklabels(ytick_labels)
         ax.tick_params(axis='y', direction='in', length=0, labelsize=8)
+        ax.tick_params(axis='x', direction='out', length=3, labelsize=8)
 
         # Plot lines to indicate train connections
         for seg_id, trains in enumerate(seg_trains):
             line = pv[seg_id, 3]
             for train in trains:
-                ax.plot([train[1], train[2]], [seg_id, seg_id + 1], lw=1, color=line_colors.get(line, 'blue'))
+                ax.plot([train[1], train[2]], [seg_id, seg_id + 1], lw=1, color=line_colors.get(line, 'black'))
 
     plt.tight_layout()
     plt.show()
@@ -192,6 +222,8 @@ def find_feas_iti_all(save_fn: str = None) -> pd.DataFrame:
         1. AFC_feas_iti_not_found.pkl: records of passengers without feasible itineraries.
             (Could be empty, if empty, not saved.)
         2. feas_iti.pkl: feasible itineraries for all passengers. (with the returned df structure)
+
+    NOTE: The full execution typically takes around **10 minutes**, depending on system performance.
 
     :return: pd.DataFrame containing feasible itineraries.
         columns: ['rid', 'iti_id', 'path_id','seg_id', 'train_id', 'board_ts', 'alight_ts']
@@ -245,7 +277,7 @@ def _test_find_feas_iti():
     """Test function for find_feas_iti."""
     # rid, uid1, ts1, uid2, ts2 = AFC[np.random.choice(len(AFC))].flatten().tolist()
     # rid = 505630  # 1349
-    rid = 6078
+    rid = 394948
     rid, uid1, ts1, uid2, ts2 = AFC[AFC[:, 0] == rid].flatten().tolist()
     # ts1, ts2 = 20000, 23000
     print(rid, uid1, uid2, ts1, ts2)
@@ -254,7 +286,7 @@ def _test_find_feas_iti():
     print(k_pv)
 
     iti_list = find_feas_iti(k_pv, ts1, ts2)
-    print(len(iti_list), iti_list)
+    print(len(iti_list))
 
     plot_seg_trains(k_pv, ts1, ts2)
     return

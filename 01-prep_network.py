@@ -21,14 +21,9 @@ def gen_path(nodes: pd.DataFrame, links: pd.DataFrame):
     # generate k-paths files
     net = ChengduMetro(nodes=nodes, links=links)
     df_p, df_pv = net.find_all_pairs_k_paths()
-    save_p_pv(df_p, save_fn="path")
-    save_p_pv(df_pv, save_fn="pathvia")
+    file_saver(lambda save_fn: df_p)(save_fn="path")
+    file_saver(lambda save_fn: df_pv)(save_fn="pathvia")
     return
-
-
-@file_saver
-def save_p_pv(df_: pd.DataFrame, save_fn: str):
-    return df_
 
 
 def main():

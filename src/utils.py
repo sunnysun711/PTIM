@@ -1,6 +1,8 @@
 import functools
 import json
+import os
 import time
+from typing import Callable
 
 import pandas as pd
 
@@ -44,7 +46,12 @@ def file_saver(func):
             return df
 
         >>> my_func(save_fn="my_data")
+        # return the result of my_func("my_data") and
         # saves to my_data.pkl
+
+        >>> my_func("my_data")
+        # this will not save the data.
+        # it will just return the result of my_func("my_data")
     """
 
     @functools.wraps(func)
@@ -72,11 +79,50 @@ def file_saver(func):
     return wrapper
 
 
+def file_auto_index_saver(func):
+    """File saver with auto-incremented filename suffix (_1, _2, ...), using same API as file_saver.
+
+    Usage:
+        @file_auto_index_saver
+        def func(..., save_fn=None): ...
+
+        >>> my_func(save_fn="my_data")
+        # return the result of my_func("my_data") and
+        # saves to my_data_1.pkl / my_data_2.pkl / ...
+        # if my_data_1.pkl exists, my_data_2.pkl will be used.
+
+        >>> my_func("my_data")
+        # this will not save the data.
+        # it will just return the result of my_func("my_data")
+    """
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        save_fn = kwargs.get('save_fn', None)
+
+        if save_fn:
+            for i in range(1, 10001):
+                indexed_save_fn = f"{save_fn}_{i}"
+                file_path = f"{DATA_DIR}/{indexed_save_fn}.pkl"
+                if not os.path.exists(file_path):
+                    kwargs["save_fn"] = indexed_save_fn
+                    break
+            else:
+                raise RuntimeError(f"[ERROR] Could not save: all {save_fn}_1.pkl to _10000.pkl exist.")
+
+        # Call original function via file_saver wrapper
+        return file_saver(func)(*args, **kwargs)
+
+    return wrapper
+
+
 @execution_timer  # ~ 0.1433 seconds for AFC
 def read_data(fn: str = "AFC", show_timer: bool = False, drop_cols: bool = True) -> pd.DataFrame | dict | list:
     """Read data file and drop specific columns based on file name."""
     if fn.endswith(".csv"):
         df = pd.read_csv(f"{DATA_DIR}//{fn}")
+    elif fn.endswith(".parquet"):
+        df = pd.read_parquet(f"{DATA_DIR}//{fn}")
     elif fn.endswith(".pkl"):
         df = pd.read_pickle(f"{DATA_DIR}//{fn}")
     elif fn.endswith(".json"):
@@ -113,6 +159,41 @@ def read_platform_exceptions() -> dict[int, list[list[int]]]:
         # convert from str to int for station uid
         data = {int(key) if key.isdigit() else key: value for key, value in data.items()}
     return data
+
+
+def load_latest_df(base_filename: str) -> pd.DataFrame:
+    """
+    Load the latest versioned file (e.g., base_1.pkl ~ base_10000.pkl).
+
+    :param base_filename: Prefix of the file.
+    :return: Loaded DataFrame.
+    """
+    for i in reversed(range(1, 10001)):
+        file_path = f"{DATA_DIR}/{base_filename}_{i}.pkl"
+        if os.path.exists(file_path):
+            print(f"[INFO] Loading latest: {file_path}")
+            return pd.read_pickle(file_path)
+    raise FileNotFoundError(f"No versioned file found for {base_filename} in range 1-10000.")
+
+
+def load_all_versioned_df(base_filename: str) -> pd.DataFrame:
+    """
+    Load and concatenate all versioned files (e.g., base_1.pkl ~ base_10000.pkl).
+
+    :param base_filename: Prefix of the file.
+    :return: Concatenated DataFrame.
+    """
+    dfs = []
+    for i in range(1, 10001):
+        file_path = f"{DATA_DIR}/{base_filename}_{i}.pkl"
+        if os.path.exists(file_path):
+            dfs.append(pd.read_pickle(file_path))
+        else:
+            break  # stop when gap is hit
+    if not dfs:
+        raise FileNotFoundError(f"No versioned files found for {base_filename}")
+    print(f"[INFO] Loaded {len(dfs)} versioned files for {base_filename}")
+    return pd.concat(dfs, ignore_index=True)
 
 
 def tstr2ts(t: str) -> int:
