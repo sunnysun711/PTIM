@@ -199,17 +199,26 @@ def plot_seg_trains(k_pv: np.ndarray, ts1: int, ts2: int):
         axs[-1].set_xlim([ts1, ts2])
         axs[-1].set_xticks(xticks)
         axs[-1].set_xticklabels(xticklabels)
-        axs[-1].tick_params(axis='x', labelrotation=45)
+        # axs[-1].tick_params(axis='x', labelrotation=45)
+        for label in axs[-1].get_xticklabels():
+            label.set_rotation(45)
+            label.set_horizontalalignment('right')
+            label.set_verticalalignment('top')
     else:
         for i in range(ncols):
             axs[-1, i].set_xlabel("Time")
             axs[-1, i].set_xlim([ts1, ts2])
             axs[-1, i].set_xticks(xticks)
             axs[-1, i].set_xticklabels(xticklabels)
-            axs[-1, i].tick_params(axis='x', labelrotation=45)
+            # axs[-1, i].tick_params(axis='x', labelrotation=45)
+            for label in axs[-1, i].get_xticklabels():
+                label.set_rotation(45)
+                label.set_horizontalalignment('right')
+                label.set_verticalalignment('top')
 
     # Flatten axs for easier indexing if multiple columns
-    axs = axs.flatten()
+    if isinstance(axs, np.ndarray):
+        axs = axs.flatten()
 
     # Loop through each path_id and plot the corresponding subgraph
     for i, (path_id, seg_trains) in enumerate(path_id_seg_trains.items()):
@@ -292,7 +301,6 @@ def find_feas_iti_all(save_fn: str = None) -> pd.DataFrame:
     _save_rids_not_found(save_fn="AFC_feas_iti_not_found")  # save rids without feasible itineraries
 
     data = np.array(data, dtype=np.int32)
-    print("feasible_iti: ", data.shape)
 
     # save feasible itineraries to file with pandas DataFrame
     df = pd.DataFrame(

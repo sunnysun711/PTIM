@@ -28,7 +28,7 @@ import os
 import pandas as pd
 
 from src.utils import read_data, file_auto_index_saver, file_saver, read_data_latest
-from utils import find_data_latest
+from src.utils import find_data_latest
 
 
 def split_feas_iti(feas_iti_cnt_limit: int = 1000):

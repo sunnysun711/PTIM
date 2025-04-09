@@ -16,26 +16,24 @@ def find_rids_with_same_final_train_in_all_itis():
     df = read_data("feas_iti_left")
 
     # Keep only the last segment for each rid + iti_id
-    last_seg = df.sort_values("seg_id").groupby(["rid", "iti_id"]).tail(1)
+    # last_seg = df.sort_values("seg_id").groupby(["rid", "iti_id"]).tail(1)
+    last_seg = df.groupby(["rid", "iti_id"]).last().reset_index()
 
-    # For each rid, check if all its iti share the same (train_id, alight_ts)
-    rid_grp = last_seg.groupby("rid")[["train_id", "alight_ts"]].agg(["nunique", "first"])
-    consistent_rids = rid_grp[
-        (rid_grp[("train_id", "nunique")] == 1) &
-        (rid_grp[("alight_ts", "nunique")] == 1)
-        ].index
+    # 对每个 rid，聚合 (train_id, alight_ts) 为元组，统计唯一值数量
+    last_seg["train_end"] = list(zip(last_seg["train_id"], last_seg["alight_ts"]))
+    unique_end_count = last_seg.groupby("rid")["train_end"].nunique()
+
+    # 筛选所有 iti 最终列车一致的 rid
+    consistent_rids = unique_end_count[unique_end_count == 1].index
 
     return df[df["rid"].isin(consistent_rids)]
 
 
-
 if __name__ == '__main__':
     # df = find_rids_with_same_final_train_in_all_itis()
-    # df = assign_feas_iti_to_trajectory([(13541, 2), (142352, 1)], save_fn="haha")
-    # print(df)
-    from src.trajectory import split_feas_iti, assign_feas_iti_to_trajectory, roll_back_assignment
-
-    # split_feas_iti()
-    # assign_feas_iti_to_trajectory([(13541, 2), (142352, 1)])
-    roll_back_assignment()
+    # print(df.sample(n=20))
+    # from scripts.find_feas_iti import _plot_check_feas_iti
+    # _plot_check_feas_iti(rid=347627)
+    KPV = read_data("pathvia")
+    print(KPV[KPV['path_id'].isin([1136109701, 1136109702, 1136109703])])
     pass
