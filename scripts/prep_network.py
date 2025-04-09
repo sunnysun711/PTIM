@@ -1,5 +1,17 @@
-# Prepare the network from Station and timetable datasets.
-# This script will generate node_info.pkl, link_info.pkl, path.pkl, and pathvia.pkl.
+"""
+This script prepares the metro network structure for pathfinding.
+It generates nodes, links, k-shortest paths, and their segment breakdowns.
+
+Key Outputs:
+- node_info.pkl: Metro station and platform node information
+- link_info.pkl: Travel and walking links between nodes
+- path.pkl: K-shortest paths with metadata
+- pathvia.pkl: Path segment details for each OD path
+
+Dependencies:
+- src.metro_net
+- src.utils
+"""
 import pandas as pd
 
 from src.utils import execution_timer, file_saver, read_data

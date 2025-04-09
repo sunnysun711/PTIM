@@ -2,7 +2,25 @@
 This module initializes and stores large, frequently used variables
 such as the train timetable (TT) and the k-shortest path via dictionary (K_PV_DICT).
 These are intended to be imported and read-only across the project.
+
+Key Variables:
+1. K_PV_DICT: Mapping from OD station UIDs to k-shortest path segments
+2. TT: Preprocessed train timetable matrix
+3. AFC: Passenger records with origin-destination-time info
+
+Usage:
+- Import the module: `import src.globals as gl`
+- Access variables: `gl.TT`, `gl.K_PV_DICT`, `gl.AFC`
+
+Data sources:
+- pathvia.pkl
+- TT.pkl
+- AFC.pkl
+
+Dependencies:
+- src.utils: For data reading
 """
+
 import numpy as np
 
 from src.utils import read_data

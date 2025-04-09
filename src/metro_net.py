@@ -1,5 +1,22 @@
-# build from TT, STA.
-# 所有UID是都是地面层，nid分为上行和下行，表示站台，换乘需要从站台（nid）到达地面（uid）然后再去站台（nid），站台与地面层有一个极小的cost
+"""
+This module constructs the metro network graph using station and timetable data.
+It builds a directed graph for shortest-path and k-path calculations.
+
+Key Classes and Functions:
+1. gen_node_from_sta: Constructs node representation from station data
+2. gen_train_links_from_tt: Generates links between platforms based on train service
+3. gen_walk_links_from_nodes: Generates walking connections for entry, egress, and platform swaps
+4. ChengduMetro: Core graph class with pathfinding and visualization utilities
+5. ChengduMetro.find_all_pairs_k_paths: Generates k-shortest paths for all OD pairs
+
+Dependencies:
+- pandas, numpy: For data handling
+- networkx: For graph representation
+- src.utils: For reading and saving data
+
+Data Sources:
+- STA.pkl, TT.pkl, platform.json
+"""
 import itertools
 from heapq import heappush, heappop
 from typing import Iterable

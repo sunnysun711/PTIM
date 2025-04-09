@@ -1,4 +1,18 @@
-# change when switchin devices
+"""
+This module defines constants and configuration for the PTIM project.
+It includes vehicle capacity definitions, density thresholds, and the base data directory.
+
+Key Variables:
+1. DATA_DIR: Base directory path for input/output data
+2. TRAIN_B_SEAT / TRAIN_A_SEAT: Seat capacities for B-type and A-type metro vehicles
+3. TRAIN_B_AREA / TRAIN_A_AREA: Standing area per car type
+4. STD_DENSITY / STD_DENSITY_COMMUTER: Acceptable standing density for normal and commuting passengers
+
+Note:
+- Train types and configurations are based on the Chengdu Metro system.
+- All data values are empirically derived or reverse-calculated.
+"""
+# change when switching devices
 # DATA_DIR = r"E:\OneDrive\Documents\00-MyResearch\_20200626_PTAM\PTIM2025\data\cd"
 DATA_DIR = r"D:\cd"
 

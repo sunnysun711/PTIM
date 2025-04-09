@@ -1,8 +1,20 @@
+"""
+This utility module provides reusable functions for file handling, timing, and data conversion.
+Includes decorators for timing and auto-saving, along with utility functions for reading and converting data.
+
+Key Functions:
+1. read_data: Load various file types with optional column pruning
+2. file_saver / file_auto_index_saver: Decorators for saving DataFrames with or without versioning
+3. read_data_latest / read_data_all: Load the latest or all versioned data files
+4. ts2tstr / tstr2ts: Timestamp and string time format conversion
+
+Dependencies:
+- pandas, os, json, time
+"""
 import functools
 import json
 import os
 import time
-from typing import Callable
 
 import pandas as pd
 
@@ -64,15 +76,15 @@ def file_saver(func):
 
         if save_fn:
             if res is None:
-                print(f"{save_fn} is empty. Skipping saving.")
+                print(f"[INFO] {save_fn} is empty. Skipping saving.")
                 return res
             # display saving dataframe
-            print(res.sample(n=10))
+            print(res.sample(n=min(10, len(res))))
             res.info()
 
             full_fn = fr"{DATA_DIR}/{save_fn}.pkl"
             res.to_pickle(full_fn)
-            print(f"{full_fn} saved.")
+            print(f"[INFO] {full_fn} saved.")
 
         return res
 
@@ -108,7 +120,7 @@ def file_auto_index_saver(func):
                     kwargs["save_fn"] = indexed_save_fn
                     break
             else:
-                raise RuntimeError(f"[ERROR] Could not save: all {save_fn}_1.pkl to _10000.pkl exist.")
+                raise RuntimeError(f"Could not save: all {save_fn}_1.pkl to _10000.pkl exist.")
 
         # Call original function via file_saver wrapper
         return file_saver(func)(*args, **kwargs)
@@ -161,6 +173,19 @@ def read_platform_exceptions() -> dict[int, list[list[int]]]:
     return data
 
 
+def find_data_latest(fn: str) -> str:
+    """
+    Find the latest versioned file (e.g., base_1.pkl ~ base_10000.pkl).
+    :param fn: Prefix of the file.
+    :return: Latest file path.
+    """
+    for i in reversed(range(1, 10001)):
+        file_path = f"{DATA_DIR}/{fn}_{i}.pkl"
+        if os.path.exists(file_path):
+            return file_path
+    raise FileNotFoundError(f"No versioned file found for {fn} in range 1-10000.")
+
+
 def read_data_latest(fn: str) -> pd.DataFrame:
     """
     Load the latest versioned file (e.g., base_1.pkl ~ base_10000.pkl).
@@ -168,12 +193,9 @@ def read_data_latest(fn: str) -> pd.DataFrame:
     :param fn: Prefix of the file.
     :return: Loaded DataFrame.
     """
-    for i in reversed(range(1, 10001)):
-        file_path = f"{DATA_DIR}/{fn}_{i}.pkl"
-        if os.path.exists(file_path):
-            print(f"[INFO] Loading latest: {file_path}")
-            return pd.read_pickle(file_path)
-    raise FileNotFoundError(f"No versioned file found for {fn} in range 1-10000.")
+    file_path = find_data_latest(fn)
+    print(f"[INFO] Loading latest: {file_path}")
+    return pd.read_pickle(file_path)
 
 
 def read_data_all(fn: str) -> pd.DataFrame:

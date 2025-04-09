@@ -1,5 +1,22 @@
 """
-Please make sure path.pkl and pathvia.pkl are already generated.
+This module handles passenger itinerary analysis for public transit systems.
+It provides functionality to find feasible train itineraries between stations within given time windows.
+
+Key Functions:
+1. find_trains: Finds available trains between two stations within a time window
+2. find_seg_trains: Finds trains for each segment of a path with pruning
+3. find_feas_iti: Finds all feasible itineraries for a given path
+4. plot_seg_trains: Visualizes available trains for each path segment
+5. find_feas_iti_all: Main function to process all passenger records
+
+Dependencies:
+- numpy: For numerical operations
+- pandas: For data manipulation
+- tqdm: For progress tracking
+
+Data sources:
+- path.pkl
+- pathvia.pkl
 """
 import numpy as np
 import pandas as pd
@@ -111,6 +128,27 @@ def find_feas_iti(k_pv: np.ndarray, ts1: int, ts2: int) -> list[list[int | tuple
 
 
 def plot_seg_trains(k_pv: np.ndarray, ts1: int, ts2: int):
+    """
+        Visualizes available trains for each segment of given paths.
+
+    Args:
+        k_pv: Array of path segments with shape [n,5]
+        ts1: Minimum timestamp for visualization
+        ts2: Maximum timestamp for visualization
+
+    Displays:
+        Interactive plot showing train connections between stations
+        - Each subplot represents a different path
+        - Lines connect boarding/alighting times
+        - Colors represent different train lines
+
+    Note:
+        Requires matplotlib and TkAgg backend
+    :param k_pv: k path via numpy array
+    :param ts1: timestamp 1
+    :param ts2: timestamp 2
+    :return:
+    """
     import matplotlib
     matplotlib.use("TkAgg")
     import matplotlib.pyplot as plt
@@ -271,29 +309,3 @@ def find_feas_iti_all(save_fn: str = None) -> pd.DataFrame:
     })
 
     return df
-
-
-def _test_find_feas_iti():
-    """Test function for find_feas_iti."""
-    # rid, uid1, ts1, uid2, ts2 = AFC[np.random.choice(len(AFC))].flatten().tolist()
-    # rid = 505630  # 1349
-    rid = 394948
-    rid, uid1, ts1, uid2, ts2 = AFC[AFC[:, 0] == rid].flatten().tolist()
-    # ts1, ts2 = 20000, 23000
-    print(rid, uid1, uid2, ts1, ts2)
-
-    k_pv = K_PV_DICT[(uid1, uid2)]
-    print(k_pv)
-
-    iti_list = find_feas_iti(k_pv, ts1, ts2)
-    print(len(iti_list))
-
-    plot_seg_trains(k_pv, ts1, ts2)
-    return
-
-
-if __name__ == '__main__':
-    # find_feas_iti_all(save_fn="feas_iti")
-    # find_feas_iti_all()
-    _test_find_feas_iti()
-    pass
