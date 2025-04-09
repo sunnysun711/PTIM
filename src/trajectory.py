@@ -2,16 +2,12 @@
 # script.
 # It is used in the main file to assign feasible itineraries to trajectories.
 # Mostly handling itinerary files.
-import os
-
 from src.utils import read_data, file_auto_index_saver, file_saver
-
-FI = read_data("feas_iti", show_timer=True)  # takes 1 second to load data
 
 
 def split_feas_iti(feas_iti_cnt_limit: int = 1000):
     """
-    Split the feas_iti.pkl into three files:
+    This is a one-step method that splits the feas_iti.pkl into three files:
         1. feas_iti_assigned_1.pkl:
             only one feasible itinerary for each rid.
         2. feas_iti_stashed.pkl:
@@ -25,6 +21,7 @@ def split_feas_iti(feas_iti_cnt_limit: int = 1000):
         Default is 1000.
     :return:
     """
+    FI = read_data("feas_iti", show_timer=True)  # takes 1 second to load data
     df = FI.drop_duplicates(["rid"], keep="last")
 
     rid_to_assign_list = df[df['iti_id'] == 1].rid.tolist()

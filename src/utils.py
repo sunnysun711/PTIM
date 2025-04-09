@@ -161,38 +161,38 @@ def read_platform_exceptions() -> dict[int, list[list[int]]]:
     return data
 
 
-def load_latest_df(base_filename: str) -> pd.DataFrame:
+def read_data_latest(fn: str) -> pd.DataFrame:
     """
     Load the latest versioned file (e.g., base_1.pkl ~ base_10000.pkl).
 
-    :param base_filename: Prefix of the file.
+    :param fn: Prefix of the file.
     :return: Loaded DataFrame.
     """
     for i in reversed(range(1, 10001)):
-        file_path = f"{DATA_DIR}/{base_filename}_{i}.pkl"
+        file_path = f"{DATA_DIR}/{fn}_{i}.pkl"
         if os.path.exists(file_path):
             print(f"[INFO] Loading latest: {file_path}")
             return pd.read_pickle(file_path)
-    raise FileNotFoundError(f"No versioned file found for {base_filename} in range 1-10000.")
+    raise FileNotFoundError(f"No versioned file found for {fn} in range 1-10000.")
 
 
-def load_all_versioned_df(base_filename: str) -> pd.DataFrame:
+def read_data_all(fn: str) -> pd.DataFrame:
     """
     Load and concatenate all versioned files (e.g., base_1.pkl ~ base_10000.pkl).
 
-    :param base_filename: Prefix of the file.
+    :param fn: Prefix of the file.
     :return: Concatenated DataFrame.
     """
     dfs = []
     for i in range(1, 10001):
-        file_path = f"{DATA_DIR}/{base_filename}_{i}.pkl"
+        file_path = f"{DATA_DIR}/{fn}_{i}.pkl"
         if os.path.exists(file_path):
             dfs.append(pd.read_pickle(file_path))
         else:
             break  # stop when gap is hit
     if not dfs:
-        raise FileNotFoundError(f"No versioned files found for {base_filename}")
-    print(f"[INFO] Loaded {len(dfs)} versioned files for {base_filename}")
+        raise FileNotFoundError(f"No versioned files found for {fn}")
+    print(f"[INFO] Loaded {len(dfs)} versioned files for {fn}")
     return pd.concat(dfs, ignore_index=True)
 
 

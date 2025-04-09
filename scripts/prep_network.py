@@ -2,7 +2,8 @@
 # This script will generate node_info.pkl, link_info.pkl, path.pkl, and pathvia.pkl.
 import pandas as pd
 
-from src.metro_net import *
+from src.utils import execution_timer, file_saver, read_data
+from src.metro_net import gen_links, gen_node_from_sta, ChengduMetro
 
 
 def get_node_and_link(read_: bool) -> tuple[pd.DataFrame, pd.DataFrame]:

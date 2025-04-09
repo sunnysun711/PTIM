@@ -1,6 +1,6 @@
 # change when switchin devices
-DATA_DIR = r"E:\OneDrive\Documents\00-MyResearch\_20200626_PTAM\PTIM2025\data\cd"
-# DATA_DIR = r""
+# DATA_DIR = r"E:\OneDrive\Documents\00-MyResearch\_20200626_PTAM\PTIM2025\data\cd"
+DATA_DIR = r"D:\cd"
 
 # B型车定员1468，超员1820；A型车定员1828, 超员2488
 # 1,2,3,4号线用车为B型车6辆编组，编组形式为：+TC-MP-M1-M2-MP-TC+。
