@@ -1,5 +1,22 @@
-# build from TT, STA.
-# 所有UID是都是地面层，nid分为上行和下行，表示站台，换乘需要从站台（nid）到达地面（uid）然后再去站台（nid），站台与地面层有一个极小的cost
+"""
+This module constructs the metro network graph using station and timetable data.
+It builds a directed graph for shortest-path and k-path calculations.
+
+Key Classes and Functions:
+1. gen_node_from_sta: Constructs node representation from station data
+2. gen_train_links_from_tt: Generates links between platforms based on train service
+3. gen_walk_links_from_nodes: Generates walking connections for entry, egress, and platform swaps
+4. ChengduMetro: Core graph class with pathfinding and visualization utilities
+5. ChengduMetro.find_all_pairs_k_paths: Generates k-shortest paths for all OD pairs
+
+Dependencies:
+- pandas, numpy: For data handling
+- networkx: For graph representation
+- src.utils: For reading and saving data
+
+Data Sources:
+- STA.pkl, TT.pkl, platform.json
+"""
 import itertools
 from heapq import heappush, heappop
 from typing import Iterable
@@ -7,6 +24,7 @@ from typing import Iterable
 import networkx as nx
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 from src.utils import read_data, read_platform_exceptions, file_saver, execution_timer
 
@@ -568,6 +586,13 @@ class ChengduMetro:
             if "platform_swap" in two_types and ("entry" in two_types or "egress" in two_types):
                 return False
 
+        # 4. walk detour check 2 (transfer via egress-entry while platform_swap is available, check 1136 -> 1097)
+        for nd1, nd2, nd3 in zip(path[:-2], path[1:-1], path[2:]):
+            if self.G.has_edge(nd1, nd3) and self.G.edges[nd1, nd3]["type"] == "platform_swap":
+                if self.G.has_edge(nd1, nd2) and self.G.has_edge(nd2, nd3) and \
+                        self.G.edges[nd1, nd2]["type"] == "egress" and self.G.edges[nd2, nd3]["type"] == "entry":
+                    return False
+
         # 3. change back to previous line_upd (except for line 7)
         line_upd_secs = self.compress_passing_info(passing_info=passing_info)
         line_upds = [(txt.split("|")[0], txt.split("|")[1]) for txt in line_upd_secs]
@@ -600,11 +625,10 @@ class ChengduMetro:
         for o_uid in uid_list:
             # get all nodes shortest paths with source as o_uid
             s_lengths, s_paths = nx.single_source_dijkstra(G=self.G, source=o_uid)
-            for d_uid in uid_list:
+            for d_uid in tqdm(uid_list, desc=f"Finding K paths for origin: {o_uid}", unit=" OD Pair"):
                 if o_uid == d_uid:
                     continue
 
-                print(f"{o_uid}->{d_uid}", end="\t")
                 shortest_path = s_paths[d_uid]
                 shortest_path_length = s_lengths[d_uid]
                 max_path_length = min(shortest_path_length * (1 + theta1), shortest_path_length + theta2)
@@ -629,7 +653,6 @@ class ChengduMetro:
                         pathvia_list.extend(pv)
                     if k_ >= k:
                         break
-            print()
 
         df_p = pd.DataFrame(path_list, columns=["path_id", "length", "transfer_cnt", "path_str"])
         df_pv = pd.DataFrame(
