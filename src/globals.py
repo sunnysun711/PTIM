@@ -7,10 +7,11 @@ Key Variables:
 1. K_PV_DICT: Mapping from OD station UIDs to k-shortest path segments
 2. TT: Preprocessed train timetable matrix
 3. AFC: Passenger records with origin-destination-time info
+4. K_PV: array of k-shortest paths, full details (including walk links)
 
 Usage:
 - Import the module: `import src.globals as gl`
-- Access variables: `gl.TT`, `gl.K_PV_DICT`, `gl.AFC`
+- Access variables: `gl.TT`, `gl.K_PV_DICT`, `gl.AFC`, `gl.K_PV`
 
 Data sources:
 - pathvia.pkl
@@ -88,3 +89,4 @@ def build_tt() -> np.ndarray[int]:
 K_PV_DICT = build_k_pv_dic()
 TT = build_tt()
 AFC = read_data("AFC", show_timer=False).drop(columns=["TRAVEL_TIME"]).reset_index().values
+K_PV = read_data("pathvia", show_timer=False).values
