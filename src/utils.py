@@ -186,7 +186,8 @@ def find_data_latest(fn: str) -> str:
     raise FileNotFoundError(f"No versioned file found for {fn} in range 1-10000.")
 
 
-def read_data_latest(fn: str) -> pd.DataFrame:
+@execution_timer
+def read_data_latest(fn: str, show_timer: bool = False) -> pd.DataFrame:
     """
     Load the latest versioned file (e.g., base_1.pkl ~ base_10000.pkl).
 
@@ -198,11 +199,13 @@ def read_data_latest(fn: str) -> pd.DataFrame:
     return pd.read_pickle(file_path)
 
 
-def read_data_all(fn: str) -> pd.DataFrame:
+@execution_timer
+def read_data_all(fn: str, show_timer: bool = False) -> pd.DataFrame:
     """
     Load and concatenate all versioned files (e.g., base_1.pkl ~ base_10000.pkl).
 
     :param fn: Prefix of the file.
+    :param show_timer: Whether to show timing information.
     :return: Concatenated DataFrame.
     """
     dfs = []

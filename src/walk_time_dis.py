@@ -54,10 +54,10 @@ def get_egress_time_from_feas_iti_assigned() -> np.ndarray:
     :return: NumPy array with shape (n_rids, 5) containing
         ["node1", "node2", "alight_ts", "ts2", "egress_time"].
     """
-    df = read_data("feas_iti_assigned", show_timer=False)
+    df = read_data_all("feas_iti_assigned", show_timer=False)
 
     # Keep only the last segment for each rid
-    last_seg = df.groupby("rid").last().reset_index().drop(columns=["iti_id", "board_ts"])
+    last_seg = df.groupby("rid").last().drop(columns=["iti_id", "board_ts"])
 
     return calculate_egress_time(last_seg)
 
@@ -71,7 +71,7 @@ def calculate_egress_time(df_last_seg: pd.DataFrame) -> np.ndarray:
     :return: NumPy array with shape (n_rids, 5) containing
         ["node1", "node2", "alight_ts", "ts2", "egress_time"].
     """
-    filtered_AFC = AFC[np.isin(AFC[:, 0], df_last_seg['rid'].tolist())]
+    filtered_AFC = AFC[np.isin(AFC[:, 0], df_last_seg.index)]
     egress_link = K_PV[len(K_PV) - 1 - np.unique(K_PV[:, 0][::-1], return_index=True)[1], :4]
     path_id_node1 = {link[0]: link[2] for link in egress_link}
     path_id_node2 = {link[0]: link[3] for link in egress_link}
