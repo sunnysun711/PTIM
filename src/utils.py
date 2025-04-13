@@ -192,6 +192,7 @@ def read_data_latest(fn: str, show_timer: bool = False) -> pd.DataFrame:
     Load the latest versioned file (e.g., base_1.pkl ~ base_10000.pkl).
 
     :param fn: Prefix of the file.
+    :param show_timer: Whether to show timing information.
     :return: Loaded DataFrame.
     """
     file_path = find_data_latest(fn)
