@@ -23,12 +23,17 @@ from src.globals import AFC, K_PV
 from src.utils import read_data, read_data_all
 
 
-def get_egress_time_from_feas_iti_left() -> np.ndarray:
+def get_egress_time_from_feas_iti_left() -> pd.DataFrame:
     """
     Find rids in feas_iti_left.pkl where all feasible itineraries share the same final train_id.
 
-    :return: NumPy array with shape (n_rids, 3) containing
-        "node1", "node2", "alight_ts", "ts2", "egress_time".
+    :return: A DataFrame with the shape (n_rids, 5), where "rid" serves as the index.
+             It includes the following columns:
+             - "node1": The starting node of the egress path.
+             - "node2": The ending node of the egress path.
+             - "alight_ts": The time when the passenger alighted from the vehicle.
+             - "ts2": The time when the passenger exited the station.
+             - "egress_time": The calculated egress time, which is the difference between "ts2" and "alight_ts".
     """
     df = read_data("feas_iti_left", show_timer=False)
 
@@ -47,12 +52,17 @@ def get_egress_time_from_feas_iti_left() -> np.ndarray:
     return calculate_egress_time(last_seg)
 
 
-def get_egress_time_from_feas_iti_assigned() -> np.ndarray:
+def get_egress_time_from_feas_iti_assigned() -> pd.DataFrame:
     """
     Find rids in all feas_iti_assigned_*.pkl files where all feasible itineraries share the same final train_id.
 
-    :return: NumPy array with shape (n_rids, 5) containing
-        ["node1", "node2", "alight_ts", "ts2", "egress_time"].
+    :return: A DataFrame with the shape (n_rids, 5), where "rid" serves as the index.
+             It includes the following columns:
+             - "node1": The starting node of the egress path.
+             - "node2": The ending node of the egress path.
+             - "alight_ts": The time when the passenger alighted from the vehicle.
+             - "ts2": The time when the passenger exited the station.
+             - "egress_time": The calculated egress time, which is the difference between "ts2" and "alight_ts".
     """
     df = read_data_all("feas_iti_assigned", show_timer=False)
 
@@ -62,14 +72,26 @@ def get_egress_time_from_feas_iti_assigned() -> np.ndarray:
     return calculate_egress_time(last_seg)
 
 
-def calculate_egress_time(df_last_seg: pd.DataFrame) -> np.ndarray:
+def calculate_egress_time(df_last_seg: pd.DataFrame) -> pd.DataFrame:
     """
-    Helper function to calculate egress time for a given set of rids. This function adds the necessary columns
-    to the DataFrame and calculates the egress time for each passenger.
+    A helper function designed to calculate the egress time for a specified set of passenger IDs (rids).
+    It enriches the input DataFrame with necessary columns and computes the egress time for each passenger.
+    The egress time is defined as the time difference between the passenger's exit time and alighting time.
 
-    :param df_last_seg: DataFrame containing the last segment of each itinerary.
-    :return: NumPy array with shape (n_rids, 5) containing
-        ["node1", "node2", "alight_ts", "ts2", "egress_time"].
+    :param df_last_seg: A DataFrame that holds the last segment information of each itinerary.
+                        Each row corresponds to a unique passenger, identified by the "rid" index.
+
+    :return: A DataFrame with the shape (n_rids, 5), where "rid" serves as the index.
+             It includes the following columns:
+             - "node1": The starting node of the egress path.
+             - "node2": The ending node of the egress path.
+             - "alight_ts": The time when the passenger alighted from the vehicle.
+             - "ts2": The time when the passenger exited the station.
+             - "egress_time": The calculated egress time, which is the difference between "ts2" and "alight_ts".
+
+    Raises:
+        AssertionError: If the last segment found does not match the last segment in the path,
+                        indicating a potential data inconsistency.
     """
     filtered_AFC = AFC[np.isin(AFC[:, 0], df_last_seg.index)]
     egress_link = K_PV[len(K_PV) - 1 - np.unique(K_PV[:, 0][::-1], return_index=True)[1], :4]
@@ -82,8 +104,7 @@ def calculate_egress_time(df_last_seg: pd.DataFrame) -> np.ndarray:
     assert df_last_seg[df_last_seg["node2"] != df_last_seg["UID2"]].shape[0] == 0, \
         "Last seg found is not the last seg in path!"
     df_last_seg['egress_time'] = df_last_seg['ts2'] - df_last_seg['alight_ts']
-    res = df_last_seg[["node1", "node2", "alight_ts", "ts2", "egress_time"]].values
-    return res
+    return df_last_seg[["node1", "node2", "alight_ts", "ts2", "egress_time"]]
 
 
 def fit_walk_time_distribution():
