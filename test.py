@@ -7,6 +7,8 @@ import pandas as pd
 import seaborn as sns
 import matplotlib
 
+from src.walk_time_dis import get_egress_link_groups
+
 matplotlib.use('TkAgg')
 
 
@@ -104,46 +106,10 @@ def plot_egress_time_distribution2(et: pd.DataFrame, title: str = ""):
     return
 
 
-def get_egress_link_groups() -> dict[int, list[tuple[int, int]]]:
-    from src.utils import read_data
-    import numpy as np
-    # key: uid, value: list of platforms (list of nodes)
-    platform = read_data(fn="platform.json", show_timer=False)
-    et_ = read_data_latest(fn=f"egress_times", show_timer=False)
-    
-    uid2linkgrp = {}
-    # for uid in np.random.choice(range(1001, 1137), 1):
-    for uid in range(1001, 1137):
-        et = et_[et_["node2"] == uid]
-        if et.shape[0] == 0:
-            print(uid, "no egress times.")
-            continue
-
-        found_platforms = et.node1.unique()
-        if str(uid) in platform:
-            platform_values = platform[str(uid)]
-            link_grps = []
-            for sub_list in platform_values:
-                new_sub_list = [(id, uid)
-                                for id in sub_list if id in found_platforms]
-                if new_sub_list:
-                    link_grps.append(new_sub_list)
-        else:
-            nid_dict = {}
-            for node1 in found_platforms:
-                nid = node1 // 10
-                if nid not in nid_dict:
-                    nid_dict[nid] = []
-                nid_dict[nid].append((int(node1), uid))
-
-            link_grps = list(nid_dict.values())
-        uid2linkgrp[uid] = link_grps
-    return uid2linkgrp
-
-
 if __name__ == '__main__':
     # save_egress_times(save_fn="egress_times")
-    # et = read_data_latest(fn="egress_times")
+    et_ = read_data_latest(fn="egress_times", show_timer=False).set_index(["node1", "node2"])
+    # todo: reject outliers of egress times.
     # print(et.sample(n=20))
 
     # gb = et.groupby(["node1", "node2"])
@@ -157,5 +123,12 @@ if __name__ == '__main__':
     # from scipy.stats import gaussian_kde
 
     res = get_egress_link_groups()
-    print(res)
+    for uid, platform_links in res.items():
+        print(uid)
+        for egress_links in platform_links:
+            # all egress links on the same platform
+            et = et_[et_.index.isin(egress_links)].copy()
+            print(et.shape, egress_links)
+            plot_egress_time_distribution(et, title=f"{egress_links}")
+
     pass
