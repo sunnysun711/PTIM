@@ -107,6 +107,50 @@ def calculate_egress_time(df_last_seg: pd.DataFrame) -> pd.DataFrame:
     return df_last_seg[["node1", "node2", "alight_ts", "ts2", "egress_time"]]
 
 
+def get_egress_link_groups(
+    platform: dict = read_data(fn="platform.json", show_timer=False),
+    et_: pd.DataFrame = read_data(fn=f"egress_times_1.pkl", show_timer=False),
+) -> dict[int, list[tuple[int, int]]]:
+    """
+    Generate egress link groups based on platform data and egress times.
+
+    Parameters:
+    platform (dict): A dictionary mapping station UIDs to their corresponding platforms.
+    et_ (pd.DataFrame): A DataFrame containing egress times for each station UID.
+
+    Returns:
+    dict[int, list[tuple[int, int]]]: A dictionary mapping each station UID to a list of link groups.
+    """
+
+    uid2linkgrp = {}
+    for uid in range(1001, 1137):
+        et = et_[et_["node2"] == uid]
+        if et.shape[0] == 0:
+            print(uid, "no egress times.")
+            continue
+
+        found_platforms = et.node1.unique()
+        if str(uid) in platform:
+            platform_values = platform[str(uid)]
+            link_grps = []
+            for sub_list in platform_values:
+                new_sub_list = [(id, uid)
+                                for id in sub_list if id in found_platforms]
+                if new_sub_list:
+                    link_grps.append(new_sub_list)
+        else:
+            nid_dict = {}
+            for node1 in found_platforms:
+                nid = node1 // 10
+                if nid not in nid_dict:
+                    nid_dict[nid] = []
+                nid_dict[nid].append((int(node1), uid))
+
+            link_grps = list(nid_dict.values())
+        uid2linkgrp[uid] = link_grps
+    return uid2linkgrp
+
+
 def fit_walk_time_distribution():
     ...
 
