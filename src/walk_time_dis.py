@@ -108,20 +108,47 @@ def calculate_egress_time(df_last_seg: pd.DataFrame) -> pd.DataFrame:
 
 
 def get_egress_link_groups(
-    platform: dict = read_data(fn="platform.json", show_timer=False),
-    et_: pd.DataFrame = read_data(fn=f"egress_times_1.pkl", show_timer=False),
-) -> dict[int, list[tuple[int, int]]]:
+        platform: dict = read_data(fn="platform.json", show_timer=False),
+        et_: pd.DataFrame = read_data(fn=f"egress_times_1.pkl", show_timer=False),
+) -> dict[int, list[list[tuple[int, int]]]]:
     """
     Generate egress link groups based on platform data and egress times.
+    This function groups the egress links for each station UID based on available platform data
+    and egress times for each rid. It returns a dictionary mapping each station UID to a list of
+    egress link groups. Each link group contains pairs of nodes that share same physical platforms.
 
-    Parameters:
-    platform (dict): A dictionary mapping station UIDs to their corresponding platforms.
-    et_ (pd.DataFrame): A DataFrame containing egress times for each station UID.
+    :param platform: A dictionary mapping station UIDs to their corresponding platform node_ids (exceptions).
+        The structure of the dictionary is:
+                     {
+                         'UID': [[node_id_1, node_id_2], ...],
+                         ...
+                     }
+                     where `node_id_1`, `node_id_2` are platform nodes.
+        Defaults to the result of `read_data(fn="platform.json", show_timer=False)`.
+    :param et_: A DataFrame containing egress times for each rid.
+        The DataFrame should have the following columns:
+            - 'node2': The station UID of the egress path.
+            - 'node1': The platform node_id of the egress path.
+        Defaults to the result of `read_data(fn=f"egress_times_1.pkl", show_timer=False)`.
+    :return: A dictionary mapping each station UID to a list of egress link groups.
+        The structure of the dictionary is:
+                     {
+                         'UID': [[(node_id_1, UID), (node_id_2, UID)],...],
+                        ...
+                     }
+        Example:
+                     {
+                         1031: [[(102241, 1031), (102240, 1031)]],
+                         1032: [[(104290, 1032), (102320, 1032)], [(104291, 1032), (102321, 1032)]],
+                         ...
+                     }
 
-    Returns:
-    dict[int, list[tuple[int, int]]]: A dictionary mapping each station UID to a list of link groups.
+    Notes:
+        - Each link group is a list of tuples, where each tuple represents a link from node1 to uid.
+        - Links within the same list should share same physical platforms.
+        - If a station UID is not found in the egress times DataFrame, a message is printed and the UID is skipped.
+
     """
-
     uid2linkgrp = {}
     for uid in range(1001, 1137):
         et = et_[et_["node2"] == uid]
