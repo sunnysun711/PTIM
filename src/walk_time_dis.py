@@ -21,7 +21,7 @@ import pandas as pd
 
 from src import config
 from src.globals import AFC, K_PV
-from src.utils import read_data_all, read_
+from src.utils import read_, read_all
 
 
 def get_egress_time_from_feas_iti_left() -> pd.DataFrame:
@@ -65,8 +65,7 @@ def get_egress_time_from_feas_iti_assigned() -> pd.DataFrame:
              - "ts2": The time when the passenger exited the station.
              - "egress_time": The calculated egress time, which is the difference between "ts2" and "alight_ts".
     """
-    # todo: read_data_all is not implemented yet
-    df = read_data_all("feas_iti_assigned", show_timer=False)
+    df = read_all(config.CONFIG["results"]["assigned"], show_timer=False)
 
     # Keep only the last segment for each rid
     last_seg = df.groupby("rid").last().drop(columns=["iti_id", "board_ts"])
@@ -109,10 +108,8 @@ def calculate_egress_time(df_last_seg: pd.DataFrame) -> pd.DataFrame:
     return df_last_seg[["node1", "node2", "alight_ts", "ts2", "egress_time"]]
 
 
-def get_egress_link_groups(
-        platform: dict = read_(fn="platform.json", show_timer=False),
-        et_: pd.DataFrame = read_(fn="egress_times_1.pkl", show_timer=False),
-) -> dict[int, list[list[tuple[int, int]]]]:
+def get_egress_link_groups(platform: dict = None, et_: pd.DataFrame = None,
+                           ) -> dict[int, list[list[tuple[int, int]]]]:
     """
     Generate egress link groups based on platform data and egress times.
     This function groups the egress links for each station UID based on available platform data
@@ -151,6 +148,10 @@ def get_egress_link_groups(
         - If a station UID is not found in the egress times DataFrame, a message is printed and the UID is skipped.
 
     """
+    platform = platform if platform is not None else read_(
+        fn="platform.json", show_timer=False)
+    et_ = et_ if et_ is not None else read_(
+        fn="egress_times_1.pkl", show_timer=False)
     uid2linkgrp = {}
     for uid in range(1001, 1137):
         et = et_[et_["node2"] == uid]

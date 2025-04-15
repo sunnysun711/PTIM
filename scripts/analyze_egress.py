@@ -8,7 +8,7 @@ from src.walk_time_dis import get_egress_time_from_feas_iti_left, get_egress_tim
 
 def save_egress_times(save_on: bool = False) -> pd.DataFrame:
     """
-    Save a combined DataFrame of egress times from feas_iti_left and feas_iti_assigned.
+    Save a combined DataFrame of egress times from left.pkl and assigned_1.pkl.
     "rid" as index.
     ["node1", "node2", "alight_ts", "ts2", "egress_time"] as columns.
     """
@@ -21,5 +21,17 @@ def save_egress_times(save_on: bool = False) -> pd.DataFrame:
 
 
 def main():
-    # save_egress_times(save_on=True)
+    print("\033[33m"
+          "======================================================================================\n"
+          "[INFO] This script generate egress time data file in `egress_times_1.pkl` as follows:\n"
+          "       1. index: rid.\n"
+          "       2. columns: [\"node1\", \"node2\", \"alight_ts\", \"ts2\", \"egress_time\"].\n"
+          "======================================================================================"
+          "\033[0m")
+    save_egress_times(save_on=True)
+    pass
+
+
+if __name__ == '__main__':
+    # main()
     pass

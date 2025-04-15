@@ -47,7 +47,7 @@ def split_feas_iti(feas_iti_cnt_limit: int = config.CONFIG["parameters"]["feas_i
         Default is given by config yaml file.
     :return:
     """
-    FI = read_(config.CONFIG["results"]["feas_iti"], show_timer=True)  # takes 1 second to load data
+    FI = read_(fn=config.CONFIG["results"]["feas_iti"], show_timer=True)  # takes 1 second to load data
     df = FI.drop_duplicates(["rid"], keep="last")
 
     rid_to_assign_list = df[df['iti_id'] == 1].rid.tolist()

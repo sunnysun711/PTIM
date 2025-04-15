@@ -85,14 +85,39 @@ def split_fn_index_ext(full_fn: str) -> tuple[str, str, str]:
             egress_times_2.pkl -> ('egress_times', '_2', '.pkl')
             iti/AFC_no_iti.pkl -> ('iti/AFC_no_iti', '', '.pkl')
     """
-    ext = "." + full_fn.split(".")[-1] if len(full_fn.split(".")) > 1 else ".pkl"
-    fn = full_fn.split(".")[0]
+    parts = full_fn.rsplit(".", 1)
+    fn = parts[0]
+    ext = "." + parts[1] if len(parts) > 1 else ".pkl"
     index = "_" + fn.split("_")[-1] if fn.split("_")[-1].isdigit() else ""
-    fn = fn[:-len(index)] if index else fn
+    fn = fn[:len(fn) - len(index)] if index else fn
     return fn, index, ext
 
 
-def get_file_path(fn: str) -> str:
+def get_folder_and_subfolder(fn: str, ext: str) -> tuple[str, str]:
+    """
+    Determines the folder and subfolder based on the file name.
+
+    Parameters:
+    -----------
+    fn : str
+        The base file name (without extension).
+    ext : str
+        The file extension.
+
+    Returns:
+    --------
+    tuple[str, str]
+        A tuple containing the folder and subfolder.
+    """
+    if fn + ext in config.CONFIG['data']:
+        return config.CONFIG['data_folder'], ""
+    elif fn + ext in config.CONFIG['results'].values():
+        return config.CONFIG['results_folder'], determine_results_subfolder(fn + ext)
+    else:
+        raise ValueError(f"Unknown file: {fn + ext}")
+
+
+def get_file_path(fn: str, latest_: bool = False) -> str:
     """
     Determines the file path based on the file name (fn) and the configuration. (no index)
 
@@ -113,35 +138,16 @@ def get_file_path(fn: str) -> str:
         If the file name is not found in the predefined list of data or results in the configuration.
     """
     fn, index, ext = split_fn_index_ext(fn)
-    if fn + ext in config.CONFIG['data']:
-        folder = config.CONFIG['data_folder']
-        subfolder = ""
-    elif fn + ext in config.CONFIG['results'].values():
-        folder = config.CONFIG['results_folder']
-        subfolder = determine_results_subfolder(fn + ext)
-    else:
-        raise ValueError(f"Unknown file: {fn + index + ext}")
+    folder, subfolder = get_folder_and_subfolder(fn, ext)
+    if latest_:
+        index = f"_{get_latest_file_index(fn)}"
 
-    fp = os.path.join(folder, subfolder, fn + index + ext)
-    return fp
+    return os.path.join(folder, subfolder, fn + index + ext)
 
 
 def determine_results_subfolder(fn: str) -> str:
     """
-    Determines the subfolder based on the file name (fn) and the configuration.
-    Parameters:
-    -----------
-    fn : str
-        The name of the file. The function checks whether the file is a part of the
-        data or results sections in the config and constructs the appropriate path.
-    Returns:
-    --------
-    str
-        The full file path including the folder, subfolder, and file name.
-    Raises:
-    -------
-    ValueError
-        If the file name is not found in the predefined list of data or results in the configuration.
+    Determines the subfolder for results files based on the file name.
     """
     if fn in [config.CONFIG["results"]["node"], config.CONFIG["results"]["link"]]:
         return config.CONFIG["results_subfolder"]["network"]
@@ -159,10 +165,22 @@ def determine_results_subfolder(fn: str) -> str:
 
 
 def get_latest_file_index(fn: str, get_next: bool = False) -> int:
-    fp = get_file_path(fn)
-    base_fp, index, ext = split_fn_index_ext(full_fn=fp)
+    """
+    Get the latest file index for versioned files.
+
+    Parameters:
+    -----------
+    fn : str
+        The base file name (without extension).
+
+    Returns:
+    --------
+    int
+        The index of the latest file.
+    """
+    base_fp = get_file_path(fn, latest_=False).rsplit(".", 1)[0]
     for i in range(1, 10001):
-        if not os.path.exists(base_fp + f"_{i}" + ext):
+        if not os.path.exists(f"{base_fp}_{i}.pkl"):
             if get_next:
                 return i
             return i - 1
@@ -225,9 +243,7 @@ def read_(fn: str = "AFC", show_timer: bool = False, drop_cols: bool = True,
     >>> read_("platform.json")
     [INFO] Reading file: data\platform.json
     """
-    fp = get_file_path(fn)
-    if latest_:
-        fp = fp.split(".")[0] + f"_{get_latest_file_index(fn, get_next=False)}." + fp.split(".")[-1]
+    fp = get_file_path(fn, latest_)
     print("[INFO] Reading file:", fp)
 
     if fp.endswith(".csv"):
@@ -301,17 +317,18 @@ def save_(fn: str, data: pd.DataFrame, auto_index_on: bool = False) -> None:
 
 
 @execution_timer
-def read_data_all(fn: str, show_timer: bool = False) -> pd.DataFrame:
+def read_all(fn: str, show_timer: bool = False) -> pd.DataFrame:
     """
-    Load and concatenate all versioned files (e.g., base_1.pkl ~ base_10000.pkl).
-
+    Reads all versioned files (e.g., base_1.pkl ~ base_10000.pkl) and concatenates them into a single DataFrame.
     :param fn: Prefix of the file.
     :param show_timer: Whether to show timing information.
     :return: Concatenated DataFrame.
     """
     dfs = []
-    for i in range(1, 10001):
-        file_path = f"{config.CONFIG['data_folder']}/{fn}_{i}.pkl"
+    fp = get_file_path(fn)
+    latest_id = get_latest_file_index(fn, get_next=False)
+    for i in range(1, latest_id + 1):
+        file_path = fp.split(".")[0] + f"_{i}." + fp.split(".")[-1]
         if os.path.exists(file_path):
             dfs.append(pd.read_pickle(file_path))
         else:

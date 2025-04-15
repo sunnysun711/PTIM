@@ -1,7 +1,9 @@
 # to test and implement GPT-generated code
 
 import matplotlib.pyplot as plt
-from src.utils import read_data_latest, ts2tstr
+from src import config
+config.load_config()
+from src.utils import ts2tstr, read_
 from scripts.analyze_egress import save_egress_times
 import pandas as pd
 import seaborn as sns
@@ -108,7 +110,8 @@ def plot_egress_time_distribution2(et: pd.DataFrame, title: str = ""):
 
 if __name__ == '__main__':
     # save_egress_times(save_fn="egress_times")
-    et_ = read_data_latest(fn="egress_times", show_timer=False).set_index(["node1", "node2"])
+
+    et_ = read_(fn="egress_times_1", show_timer=False, latest_=False).set_index(["node1", "node2"])
     # todo: reject outliers of egress times.
     # print(et.sample(n=20))
 

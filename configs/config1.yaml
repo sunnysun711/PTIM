@@ -28,6 +28,7 @@ use_existing:
   network: true
   path: true
   itinerary: true
+  trajectory: true
 
 parameters:
   # parameters for path

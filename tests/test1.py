@@ -1,18 +1,44 @@
-import yaml
-import os
+import argparse
 
 
-
-if __name__ == '__main__':
+def main(config_file):
+    # Importing the necessary modules
     from src import config
-    config.load_config()
-    from src.walk_time_dis import get_egress_link_groups
-    from src.utils import read_, save_, get_latest_file_index, get_file_path
 
-    # print(get_file_path("assigned"))
-    # print(read_(fn="assigned.pkl", latest_=True))
-    # assigned = read_(fn="assigned.pkl", latest_=True)
-    # save_(fn="assigned", data=assigned, auto_index_on=True)
-    # pla = read_("platform.json")
-    print(get_egress_link_groups())
-    pass
+    # Load the configuration using the config file path
+    config.load_config(config_file)
+
+    # Running the various modules
+    if not config.CONFIG["use_existing"]["network"]:
+        from scripts import prep_network
+        prep_network.main(read_network=False)
+    elif not config.CONFIG["use_existing"]["path"]:
+        from scripts import prep_network
+        prep_network.main(read_network=True)
+
+    if not config.CONFIG["use_existing"]["itinerary"]:
+        from scripts import find_feas_iti
+        find_feas_iti.main()
+
+    if not config.CONFIG["use_existing"]["trajectory"]:
+        from scripts import split_feas_iti
+        split_feas_iti.main()
+
+    from scripts import analyze_egress
+    analyze_egress.main()
+
+
+if __name__ == "__main__":
+    # Set up argument parsing
+    parser = argparse.ArgumentParser(description="Run the script with a given config file.")
+    parser.add_argument(
+        "--config",
+        type=str,
+        required=False,  # Optional argument to allow defaults
+        default="configs/config1.yaml",  # Default config path
+        help="Path to the configuration file."
+    )
+    args = parser.parse_args()
+
+    # Pass the config file to the main function
+    main(args.config)

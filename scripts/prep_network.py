@@ -56,15 +56,20 @@ def get_node_and_link(read_on: bool) -> tuple[pd.DataFrame, pd.DataFrame]:
 def gen_path(nodes: pd.DataFrame, links: pd.DataFrame):
     # generate k-paths files
     net = ChengduMetro(nodes=nodes, links=links)
-    df_p, df_pv = net.find_all_pairs_k_paths()  # takes 3 hours to run
+    df_p, df_pv = net.find_all_pairs_k_paths(
+        k=config.CONFIG["parameters"]["k"],
+        theta1=config.CONFIG["parameters"]["theta1"],
+        theta2=config.CONFIG["parameters"]["theta2"],
+        transfer_deviation=config.CONFIG["parameters"]["transfer_deviation"]
+    )  # takes 3 hours to run
     save_(config.CONFIG["results"]["path"], df_p, auto_index_on=False)
     save_(config.CONFIG["results"]["pathvia"], df_pv, auto_index_on=False)
     return
 
 
-def main():
+def main(read_network: bool):
     print("\033[33m"
-          "======================================================================================"
+          "======================================================================================\n"
           "[INFO] This script prepares the metro network structure for pathfinding.\n"
           "       It generates nodes, links, k-shortest paths, and their segment breakdowns.\n"
           "       Key Outputs:\n"
@@ -77,7 +82,7 @@ def main():
     print("\033[33m"
           "[INFO] Generating node and link files...\n"
           "\033[0m")
-    nodes, links = get_node_and_link(read_on=False)
+    nodes, links = get_node_and_link(read_on=read_network)
     print("\033[33m"
           "[INFO] Generating path and pathvia files...\n"
           "\033[0m")

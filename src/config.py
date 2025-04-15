@@ -41,6 +41,10 @@ def check_used_results(config: dict):
     if config['use_existing']["itinerary"]:
         check_file_exists(config, config["results_subfolder"]["itinerary"], "feas_iti")
 
+    if config['use_existing']["trajectory"]:
+        check_file_exists(config, config["results_subfolder"]["trajectory"], "left")
+        check_file_exists(config, config["results_subfolder"]["trajectory"], "stashed")
+
 
 def check_file_exists(config: dict, subfolder: str, result_key: str):
     """Helper function to check if a result file exists."""
