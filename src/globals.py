@@ -24,7 +24,8 @@ Dependencies:
 
 import numpy as np
 
-from src.utils import read_data
+from src import config
+from src.utils import read_
 
 
 def build_k_pv_dic() -> dict[(int, int), np.ndarray]:
@@ -37,7 +38,7 @@ def build_k_pv_dic() -> dict[(int, int), np.ndarray]:
              ["path_id", "nid1", "nid2", "line", "updown"].
     """
     # Read and preprocess path via data
-    pv_df = read_data("pathvia.pkl", show_timer=False).sort_values(by=["path_id", "pv_id"])
+    pv_df = read_(config.CONFIG["results"]["pathvia"], show_timer=False).sort_values(by=["path_id", "pv_id"])
     pv_df["nid1"] = pv_df["node_id1"] // 10
     pv_df["nid2"] = pv_df["node_id2"] // 10
 
@@ -77,7 +78,7 @@ def build_tt() -> np.ndarray[int]:
         ["TRAIN_ID", "STATION_NID", "LINE_NID", "UPDOWN", "ts1", "DEPARTURE_TS"],
         where `ts1` is the time when the doors open.
     """
-    tt_df = read_data("TT", show_timer=False).reset_index()
+    tt_df = read_("TT", show_timer=False).reset_index()
     tt_df = tt_df.sort_values(["LINE_NID", "UPDOWN", "TRAIN_ID", "DEPARTURE_TS"])
     tt_df["ts1"] = tt_df["DEPARTURE_TS"] - tt_df["STOP_TIME"]
     return tt_df[["TRAIN_ID", "STATION_NID", "LINE_NID", "UPDOWN", "ts1", "DEPARTURE_TS"]].values
@@ -88,5 +89,5 @@ def build_tt() -> np.ndarray[int]:
 # ---------------------------
 K_PV_DICT = build_k_pv_dic()
 TT = build_tt()
-AFC = read_data("AFC", show_timer=False).drop(columns=["TRAVEL_TIME"]).reset_index().values
-K_PV = read_data("pathvia", show_timer=False).values
+AFC = read_("AFC", show_timer=False).drop(columns=["TRAVEL_TIME"]).reset_index().values
+K_PV = read_(config.CONFIG["results"]["pathvia"], show_timer=False).values

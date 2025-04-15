@@ -19,8 +19,9 @@ Import and call the following functions as needed:
 import numpy as np
 import pandas as pd
 
+from src import config
 from src.globals import AFC, K_PV
-from src.utils import read_data, read_data_all
+from src.utils import read_data_all, read_
 
 
 def get_egress_time_from_feas_iti_left() -> pd.DataFrame:
@@ -35,7 +36,7 @@ def get_egress_time_from_feas_iti_left() -> pd.DataFrame:
              - "ts2": The time when the passenger exited the station.
              - "egress_time": The calculated egress time, which is the difference between "ts2" and "alight_ts".
     """
-    df = read_data("feas_iti_left", show_timer=False)
+    df = read_(config.CONFIG["results"]["left"], show_timer=False)
 
     # Keep only the last segment for each itinerary of one rid
     last_seg_all_iti = df.groupby(["rid", "iti_id"]).last().reset_index()
@@ -64,6 +65,7 @@ def get_egress_time_from_feas_iti_assigned() -> pd.DataFrame:
              - "ts2": The time when the passenger exited the station.
              - "egress_time": The calculated egress time, which is the difference between "ts2" and "alight_ts".
     """
+    # todo: read_data_all is not implemented yet
     df = read_data_all("feas_iti_assigned", show_timer=False)
 
     # Keep only the last segment for each rid
@@ -108,8 +110,8 @@ def calculate_egress_time(df_last_seg: pd.DataFrame) -> pd.DataFrame:
 
 
 def get_egress_link_groups(
-        platform: dict = read_data(fn="platform.json", show_timer=False),
-        et_: pd.DataFrame = read_data(fn=f"egress_times_1.pkl", show_timer=False),
+        platform: dict = read_(fn="platform.json", show_timer=False),
+        et_: pd.DataFrame = read_(fn="egress_times_1.pkl", show_timer=False),
 ) -> dict[int, list[list[tuple[int, int]]]]:
     """
     Generate egress link groups based on platform data and egress times.

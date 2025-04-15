@@ -72,8 +72,8 @@ def main():
     print("\033[33m"
           "[INFO] Running find_feas_iti_all and split_feas_iti(1000)...\n"
           "\033[0m")
-    find_feas_iti_all(save_fn="feas_iti")  # takes 10 minutes to run
-    split_feas_iti(feas_iti_cnt_limit=1000)  # split feas_iti.pkl into three files
+    find_feas_iti_all()  # takes 10 minutes to run
+    split_feas_iti()  # split feas_iti.pkl into three files
     return
 
 

@@ -26,20 +26,20 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from src.utils import read_data, read_platform_exceptions, file_saver, execution_timer
+from src import config
+from src.utils import read_, save_
 
 
-@file_saver
-def gen_node_from_sta(save_fn: str = None) -> pd.DataFrame:
+def gen_node_from_sta(save_on: bool = False) -> pd.DataFrame:
     """
     Generate node information from the station file.
     UID is used for ground surfaces, NID * 10 + 0 is for downward platform, NID * 10 + 1 is for upward platform.
 
-    :param save_fn: file path to save node info.
+    :param save_on: Whether to save the result to a file. Default is False.
     :return: Dataframe with columns ('STATION_NID', 'STATION_UID', 'IS_TRANSFER', 'IS_TERMINAL', 'LINE_NID') and
         index ('node_id').
     """
-    df = read_data(fn="STA").reset_index()
+    df = read_(fn="STA", show_timer=False).reset_index()
     df1 = df.copy()
     df2 = df.copy()
     df1["node_id"] = df1["STATION_NID"] * 10
@@ -64,6 +64,9 @@ def gen_node_from_sta(save_fn: str = None) -> pd.DataFrame:
     assert nodes.node_id.unique().size == nodes.shape[0], "node id not unique."
 
     nodes.set_index("node_id", inplace=True)
+
+    if save_on:
+        save_(fn=config.CONFIG["results"]["node"], data=nodes, auto_index_on=False)
 
     return nodes
 
@@ -107,7 +110,7 @@ def gen_train_links_from_tt() -> pd.DataFrame:
     """
     NO_MIN_PASS_TRAIN = 20
 
-    df = read_data(fn="TT") \
+    df = read_(fn="TT", show_timer=False) \
         .drop(columns=["STATION_UID"]) \
         .sort_values(by=["TRAIN_ID", "ARRIVE_TS"]) \
         .reset_index()
@@ -144,18 +147,19 @@ def gen_walk_links_from_nodes(
     """
     Generate walk links from nodes.
     :param nodes: Dataframe with columns ('STATION_NID', 'STATION_UID', 'IS_TRANSFER', 'IS_TERMINAL', 'LINE_NID') and
-        index ('node_id'). Defaults to None, means reading from `read_data(fn='node_info')`.
+        index ('node_id'). Defaults to None, means reading from `read_(fn='node_info')`.
     :param platform_swap_time: Defaults to 4 seconds.
     :param entry_time: Defaults to 15 seconds.
     :param egress_time: Defaults to 15 seconds.
     :param platform_exceptions: dict[uid, [[node_id, node_id], [node_id]]]. A dictionary where keys are station uids
         and values are lists of connected platform node ids. Represents special platform connection cases.
-        Defaults to None, means generated from `read_platform_exceptions()`.
+        Defaults to None, means generated from `read_("platform.json")`.
     :return: Dataframe of columns ['node_id1', 'node_id2', 'link_type', 'link_weight'].
     """
-    platform_exceptions = read_platform_exceptions() if platform_exceptions is None else platform_exceptions
+    platform_exceptions = read_("platform.json",
+                                show_timer=False) if platform_exceptions is None else platform_exceptions
     # print(platform_exceptions)
-    nodes = read_data(fn="node_info").dropna(subset=["LINE_NID"]) if nodes is None else nodes
+    nodes = read_(fn="node_info", show_timer=False).dropna(subset=["LINE_NID"]) if nodes is None else nodes
 
     links = []  # [node_id1, node_id2, link_type, link_weight]
 
@@ -189,11 +193,10 @@ def gen_walk_links_from_nodes(
     return walk_links
 
 
-@file_saver
 def gen_links(platform_swap_time: float = 3,
               entry_time: float = 15,
               egress_time: float = 15,
-              save_fn: str = None) -> pd.DataFrame:
+              save_on: bool = False) -> pd.DataFrame:
     """
     Generate the links (train and walk) between metro nodes.
 
@@ -209,7 +212,7 @@ def gen_links(platform_swap_time: float = 3,
     :param platform_swap_time: The time taken to swap platforms, default is 3 seconds.
     :param entry_time: The time taken to walk from station gates to the platforms, default is 15 seconds.
     :param egress_time: The time taken to walk from a platform to the station gates, default is 15 seconds.
-    :param save_fn: The file path to save the generated links, if provided. This parameter is optional.
+    :param save_on: Whether to save the generated links to a file, default is False.
     :return: Dataframe of columns ['node_id1', 'node_id2', 'link_type', 'link_weight'].
     """
     train_links = gen_train_links_from_tt().reset_index().drop(columns=["count"])
@@ -227,6 +230,8 @@ def gen_links(platform_swap_time: float = 3,
 
     all_links = pd.concat([train_links, walk_links], ignore_index=True)
 
+    if save_on:
+        save_(fn=config.CONFIG["results"]["link"], data=all_links, auto_index_on=False)
     return all_links
 
 

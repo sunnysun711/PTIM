@@ -20,18 +20,18 @@ Dependencies:
 
 Data Sources:
 - feas_iti.pkl
-- feas_iti_assigned.pkl (will generate)
-- feas_iti_left.pkl (will generate)
+- assigned_1.pkl (will generate)
+- left.pkl (will generate)
 """
 import os
 
 import pandas as pd
 
-from src.utils import read_data, file_auto_index_saver, file_saver, read_data_latest
-from src.utils import find_data_latest
+from src import config
+from src.utils import read_, save_
 
 
-def split_feas_iti(feas_iti_cnt_limit: int = 1000):
+def split_feas_iti(feas_iti_cnt_limit: int = config.CONFIG["parameters"]["feas_iti_cnt_limit"]):
     """
     This is a one-step method that splits the feas_iti.pkl into three files:
         1. feas_iti_assigned_1.pkl:
@@ -44,10 +44,10 @@ def split_feas_iti(feas_iti_cnt_limit: int = 1000):
         The maximum number of feasible itineraries for each rid.
         If the number of feasible itineraries for a rid is greater than this limit,
         the corresponding row will be saved to feas_iti_stashed.pkl.
-        Default is 1000.
+        Default is given by config yaml file.
     :return:
     """
-    FI = read_data("feas_iti", show_timer=True)  # takes 1 second to load data
+    FI = read_(config.CONFIG["results"]["feas_iti"], show_timer=True)  # takes 1 second to load data
     df = FI.drop_duplicates(["rid"], keep="last")
 
     rid_to_assign_list = df[df['iti_id'] == 1].rid.tolist()
@@ -60,14 +60,14 @@ def split_feas_iti(feas_iti_cnt_limit: int = 1000):
     left_df = FI[FI['rid'].isin(rid_to_left_list)]
 
     # Save the filtered DataFrames to new files
-    file_auto_index_saver(lambda save_fn: assigned_df)(save_fn="feas_iti_assigned")
-    file_saver(lambda save_fn: stashed_df)(save_fn="feas_iti_stashed")
-    file_saver(lambda save_fn: left_df)(save_fn="feas_iti_left")
+    save_(fn=config.CONFIG["results"]["assigned"], data=assigned_df, auto_index_on=True)
+    save_(fn=config.CONFIG["results"]["stashed"], data=stashed_df, auto_index_on=False)
+    save_(fn=config.CONFIG["results"]["left"], data=left_df, auto_index_on=False)
 
-    print(f"[INFO] Split feas_iti.pkl into three files:")
-    print(f"[INFO] 1. feas_iti_assigned_1.pkl: {len(assigned_df)} rows")
-    print(f"[INFO] 2. feas_iti_stashed.pkl: {len(stashed_df)} rows")
-    print(f"[INFO] 3. feas_iti_left.pkl: {len(left_df)} rows")
+    print(f"[INFO] Split {config.CONFIG['results']['feas_iti']} into three files:")
+    print(f"[INFO] 1. assigned_1.pkl: {len(assigned_df)} rows")
+    print(f"[INFO] 2. stashed.pkl: {len(stashed_df)} rows")
+    print(f"[INFO] 3. left.pkl: {len(left_df)} rows")
     return
 
 
@@ -75,7 +75,7 @@ def assign_feas_iti_to_trajectory(rid_iti_id_pair: list[tuple[int, int]]):
     """
     Assign feasible itineraries to trajectories.
     """
-    fi_left = read_data("feas_iti_left", show_timer=False)
+    fi_left = read_(config.CONFIG["results"]['left'], show_timer=False)
 
     assigned_df = fi_left.merge(
         pd.DataFrame(rid_iti_id_pair, columns=["rid", "iti_id"]),
@@ -84,12 +84,11 @@ def assign_feas_iti_to_trajectory(rid_iti_id_pair: list[tuple[int, int]]):
     )
 
     # save feas_iti_assigned
-    file_auto_index_saver(lambda save_fn: assigned_df)(save_fn="feas_iti_assigned")
+    save_(fn=config.CONFIG["results"]["assigned"], data=assigned_df, auto_index_on=True)
 
     # override and save feas_iti_left
     remaining_df = fi_left[~fi_left["rid"].isin(assigned_df["rid"])]
-    file_saver(lambda save_fn: remaining_df)(save_fn="feas_iti_left")
-
+    save_(fn=config.CONFIG["results"]["left"], data=remaining_df, auto_index_on=False)
     return
 
 
@@ -97,23 +96,28 @@ def roll_back_assignment():
     """
     Roll back the latest feasible itinerary assignment.
     """
-    file_latest = find_data_latest("feas_iti_assigned")
-    assigned_df = pd.read_pickle(file_latest)
+    from src.utils import get_file_path, get_latest_file_index
+    fp = get_file_path(config.CONFIG["results"]["assigned"])
+    latest_version = get_latest_file_index(config.CONFIG["results"]["assigned"], get_next=False)
+    fp = fp.split(".")[0] + f"_{latest_version}." + fp.split(".")[-1]
+
+    assigned_df = read_(config.CONFIG["results"]["assigned"], latest_=True)
     rid_list = assigned_df["rid"].unique().tolist()
     print("rid_list", rid_list)
 
-    os.remove(file_latest)
-    print(f"[INFO] Removed {file_latest}.")
+    os.remove(fp)
+    print(f"[INFO] Removed {fp}.")
 
     # find assigned rid in feas_iti.pkl
-    fi_all = read_data("feas_iti", show_timer=False)
+    fi_all = read_(config.CONFIG["results"]["feas_iti"], show_timer=False)
     to_restore = fi_all[fi_all["rid"].isin(rid_list)]
     print("to_restore shape", to_restore.shape)
 
     # add related info back to feas_iti_left.pkl
-    fi_left = read_data("feas_iti_left", show_timer=False)
+    fi_left = read_(config.CONFIG["results"]["left"], show_timer=False)
     fi_left = pd.concat([fi_left, to_restore])
-    file_saver(lambda save_fn: fi_left)(save_fn="feas_iti_left")
+    save_(fn=config.CONFIG["results"]["left"], data=fi_left, auto_index_on=False)
+
     return
 
 
