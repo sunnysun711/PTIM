@@ -24,6 +24,9 @@ results:
   assigned: "assigned.pkl"
   left: "left.pkl"
   stashed: "stashed.pkl"
+
+figure_folder: "figures"
+
 use_existing:
   network: false
   path: false

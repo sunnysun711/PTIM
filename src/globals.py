@@ -27,6 +27,8 @@ import numpy as np
 from src import config
 from src.utils import read_
 
+K_PV: np.ndarray = np.array([])
+
 
 def build_k_pv_dic() -> dict[(int, int), np.ndarray]:
     """
@@ -39,6 +41,8 @@ def build_k_pv_dic() -> dict[(int, int), np.ndarray]:
     """
     # Read and preprocess path via data
     pv_df = read_(config.CONFIG["results"]["pathvia"], show_timer=False).sort_values(by=["path_id", "pv_id"])
+    global K_PV
+    K_PV = pv_df.values
     pv_df["nid1"] = pv_df["node_id1"] // 10
     pv_df["nid2"] = pv_df["node_id2"] // 10
 
@@ -90,4 +94,3 @@ def build_tt() -> np.ndarray[int]:
 K_PV_DICT = build_k_pv_dic()
 TT = build_tt()
 AFC = read_("AFC", show_timer=False).drop(columns=["TRAVEL_TIME"]).reset_index().values
-K_PV = read_(config.CONFIG["results"]["pathvia"], show_timer=False).values

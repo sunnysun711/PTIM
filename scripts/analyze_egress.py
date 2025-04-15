@@ -20,6 +20,10 @@ def save_egress_times(save_on: bool = False) -> pd.DataFrame:
     return df
 
 
+def plot_egress_times():
+    pass
+
+
 def main():
     print("\033[33m"
           "======================================================================================\n"

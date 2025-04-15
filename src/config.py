@@ -28,6 +28,14 @@ def gen_results_folders(config: dict):
             print(f"[INFO] Created subfolder: {subfolder_path}")
 
 
+def gen_figure_folders(config: dict):
+    """Generate necessary figure folders."""
+    figure_folder = config['figure_folder']
+    if not os.path.exists(figure_folder):
+        os.makedirs(figure_folder)
+        print(f"[INFO] Created figure folder: {figure_folder}")
+
+
 def check_used_results(config: dict):
     """Check if required result files exist."""
     if config['use_existing']["network"]:
@@ -63,5 +71,6 @@ def load_config(config_file='configs/config1.yaml') -> dict:
     check_data_presence(CONFIG)
     gen_results_folders(CONFIG)
     check_used_results(CONFIG)
+    gen_figure_folders(CONFIG)
 
     return CONFIG

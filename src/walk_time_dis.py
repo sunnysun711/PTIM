@@ -18,15 +18,20 @@ Import and call the following functions as needed:
 """
 import numpy as np
 import pandas as pd
+import matplotlib
+
+matplotlib.use('TkAgg')
+from matplotlib import pyplot as plt
+import seaborn as sns
 
 from src import config
 from src.globals import AFC, K_PV
-from src.utils import read_, read_all
+from src.utils import read_, read_all, ts2tstr
 
 
 def get_egress_time_from_feas_iti_left() -> pd.DataFrame:
     """
-    Find rids in feas_iti_left.pkl where all feasible itineraries share the same final train_id.
+    Find rids in left.pkl where all feasible itineraries share the same final train_id.
 
     :return: A DataFrame with the shape (n_rids, 5), where "rid" serves as the index.
              It includes the following columns:
@@ -55,7 +60,7 @@ def get_egress_time_from_feas_iti_left() -> pd.DataFrame:
 
 def get_egress_time_from_feas_iti_assigned() -> pd.DataFrame:
     """
-    Find rids in all feas_iti_assigned_*.pkl files where all feasible itineraries share the same final train_id.
+    Find rids in all assigned_*.pkl files where all feasible itineraries share the same final train_id.
 
     :return: A DataFrame with the shape (n_rids, 5), where "rid" serves as the index.
              It includes the following columns:
@@ -108,8 +113,10 @@ def calculate_egress_time(df_last_seg: pd.DataFrame) -> pd.DataFrame:
     return df_last_seg[["node1", "node2", "alight_ts", "ts2", "egress_time"]]
 
 
-def get_egress_link_groups(platform: dict = None, et_: pd.DataFrame = None,
-                           ) -> dict[int, list[list[tuple[int, int]]]]:
+def get_egress_link_groups(
+        platform: dict = None,
+        et_: pd.DataFrame = None,
+) -> dict[int, list[list[tuple[int, int]]]]:
     """
     Generate egress link groups based on platform data and egress times.
     This function groups the egress links for each station UID based on available platform data
@@ -123,12 +130,12 @@ def get_egress_link_groups(platform: dict = None, et_: pd.DataFrame = None,
                          ...
                      }
                      where `node_id_1`, `node_id_2` are platform nodes.
-        Defaults to the result of `read_data(fn="platform.json", show_timer=False)`.
+        Defaults to the result of `read_(fn="platform.json", show_timer=False)`.
     :param et_: A DataFrame containing egress times for each rid.
         The DataFrame should have the following columns:
             - 'node2': The station UID of the egress path.
             - 'node1': The platform node_id of the egress path.
-        Defaults to the result of `read_data(fn=f"egress_times_1.pkl", show_timer=False)`.
+        Defaults to the result of `read_(fn=f"egress_times_1.pkl", show_timer=False)`.
     :return: A dictionary mapping each station UID to a list of egress link groups.
         The structure of the dictionary is:
                      {
@@ -148,10 +155,8 @@ def get_egress_link_groups(platform: dict = None, et_: pd.DataFrame = None,
         - If a station UID is not found in the egress times DataFrame, a message is printed and the UID is skipped.
 
     """
-    platform = platform if platform is not None else read_(
-        fn="platform.json", show_timer=False)
-    et_ = et_ if et_ is not None else read_(
-        fn="egress_times_1.pkl", show_timer=False)
+    platform = platform if platform is not None else read_(fn="platform.json", show_timer=False)
+    et_ = et_ if et_ is not None else read_(fn="egress_times_1.pkl", show_timer=False)
     uid2linkgrp = {}
     for uid in range(1001, 1137):
         et = et_[et_["node2"] == uid]
@@ -164,8 +169,7 @@ def get_egress_link_groups(platform: dict = None, et_: pd.DataFrame = None,
             platform_values = platform[str(uid)]
             link_grps = []
             for sub_list in platform_values:
-                new_sub_list = [(id, uid)
-                                for id in sub_list if id in found_platforms]
+                new_sub_list = [(id, uid) for id in sub_list if id in found_platforms]
                 if new_sub_list:
                     link_grps.append(new_sub_list)
         else:
@@ -179,6 +183,107 @@ def get_egress_link_groups(platform: dict = None, et_: pd.DataFrame = None,
             link_grps = list(nid_dict.values())
         uid2linkgrp[uid] = link_grps
     return uid2linkgrp
+
+
+def get_reject_outlier_bd(data: np.ndarray, method: str = "zscore", abs_max: int = None) -> tuple[float, float]:
+    """
+    reject outliers of data using zscore or boxplot method
+    see:
+        boxplot: https://www.secrss.com/articles/11994
+        zscore: https://www.zhihu.com/question/38066650
+
+    :param data:
+    :param method: using what method to delete outliers.
+    :param abs_max: absolute max value of data. If data > abs_max, delete it.
+    :return:
+    """
+    # Initialize bounds
+    lower_bound, upper_bound = 0, 500
+
+    # First reject outliers by method
+    if method == "boxplot":
+        miu = np.mean(data)
+        Q1 = np.percentile(data, 25)
+        Q3 = np.percentile(data, 75)
+        lower_whisker = Q1 - (miu - Q1)  # lower limit
+        upper_whisker = Q3 + (Q3 - miu)  # upper limit
+        lower_bound, upper_bound = lower_whisker, upper_whisker
+    elif method == "zscore":
+        lower_bound, upper_bound = np.mean(data) - 3 * np.std(data), np.mean(data) + 3 * np.std(data)
+    else:
+        raise Exception("Please use either boxplot or zscore method to reject outliers!")
+
+    # Then reject outliers manually
+    if abs_max:
+        upper_bound = min(upper_bound, abs_max)
+
+    return lower_bound, upper_bound
+
+
+def plot_egress_time_dis(egress_time: np.ndarray, alight_ts: np.ndarray, title: str = "", show_: bool = True):
+    # Set up the figure and axes for the grid layout
+    fig = plt.figure(figsize=(15, 8))
+    grid = plt.GridSpec(2, 2, height_ratios=[4, 1], width_ratios=[1, 0.25])
+
+    # Histogram of the egress time distribution (all day)
+    ax_hist_right = fig.add_subplot(grid[0, 1])
+    sns.histplot(y=egress_time, kde=True, ax=ax_hist_right, color="blue", bins=30)
+    ax_hist_right.set_xlabel("Frequency")
+    ax_hist_right.set_ylabel("")
+
+    # Scatter plot in the center
+    ax_scatter = fig.add_subplot(grid[0, 0], sharey=ax_hist_right)
+    ax_scatter.scatter(alight_ts, egress_time, alpha=0.4)
+    # ax_scatter.set_xlabel("Alight Timestamp")
+    ax_scatter.set_ylabel("Egress Time")
+    ax_scatter.set_xticks(range(6 * 3600, 24 * 3600 + 1, 3600))
+    ax_scatter.set_xticklabels([f"{i:02}:00" for i in range(6, 25, 1)])
+    ax_scatter.set_xlim(6 * 3600, 24 * 3600)
+    ax_scatter.set_title("Egress Time Distribution " + title)
+
+    # Boxplot of egress time versus alight_ts, with customized bin width
+    _bin_width = 1800
+    alight_ts_binned = (alight_ts // _bin_width) * _bin_width
+
+    ax_box = fig.add_subplot(grid[1, 0])
+    sns.boxplot(x=alight_ts_binned, y=egress_time, ax=ax_box)
+    ax_box.set_xlabel(f"Alight Timestamp")
+    ax_box.set_ylabel("Egress Time")
+    ax_box.set_xticks([i - 0.5 for i in range((24 - 6) * 3600 // _bin_width + 1)])
+    ax_box.set_xticklabels([ts2tstr(ts) for ts in range(6 * 3600, 24 * 3600 + 1, _bin_width)])
+    ax_box.set_xlim(- 0.5, (24 - 6) * 3600 // _bin_width - 0.5)
+    for label in ax_box.get_xticklabels():
+        label.set_rotation(90)
+
+    plt.tight_layout()
+    if show_:  # Show the plot
+        plt.show()
+    else:  # Save the plot
+        fig.savefig(fname=f"figures/egress_time_dis_{title}.pdf", dpi=600)
+        plt.clf()
+    return
+
+
+def plot_egress_time_dis_all():
+    et_ = read_(fn="egress_times_1", show_timer=False, latest_=False)
+    et__ = et_.set_index(["node1", "node2"])
+    for uid, platform_links in get_egress_link_groups(et_=et_).items():
+        print(uid, platform_links)
+        for egress_links in platform_links:
+            # all egress links on the same platform
+            et = et__[et__.index.isin(egress_links)]
+            if et.shape[0] == 0:
+                continue
+            print("Data size: ", et.shape[0], egress_links)
+            lb, ub = get_reject_outlier_bd(data=et['egress_time'].values, method="zscore", abs_max=500)
+            et = et[(et['egress_time'] >= lb) & (et['egress_time'] <= ub)]
+            print(f"Bounded by [{lb}, {ub}]: ", et.shape[0])
+
+            plot_egress_time_dis(
+                egress_time=et['egress_time'].values, alight_ts=et['alight_ts'].values, title=f"{egress_links}",
+                show_=False  # save
+            )
+    return
 
 
 def fit_walk_time_distribution():
@@ -237,3 +342,8 @@ def get_cdf(walk_param: dict[str, float], t_start: float | np.ndarray, t_end: fl
     Efficiently supports vectorized input for use with entire Series/arrays.
     """
     ...
+
+
+if __name__ == '__main__':
+    # Load the configuration using the config file path
+    config.load_config(config_file="configs/config1.yaml")
