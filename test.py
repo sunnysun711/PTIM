@@ -1,21 +1,11 @@
 # to test and implement GPT-generated code
 
-import matplotlib.pyplot as plt
-from src import config
-
-config.load_config()
-from src.utils import ts2tstr, read_
-from scripts.analyze_egress import save_egress_times
-import pandas as pd
-import seaborn as sns
 import matplotlib
-
-from src.walk_time_dis import get_egress_link_groups
 
 matplotlib.use('TkAgg')
 
 
-def plot_egress_time_distribution2(et: pd.DataFrame, title: str = ""):
+def plot_egress_time_distribution2():
     import numpy as np
     from scipy.stats import gaussian_kde
     from scipy.integrate import quad
@@ -53,13 +43,13 @@ def plot_egress_time_distribution2(et: pd.DataFrame, title: str = ""):
     plt.show()
 
     # Plot CDF
-    plt.figure(figsize=(10, 6))
-    plt.plot(x_values, cdf_values, label='CDF', color='blue')
-    plt.title('CDF from Kernel Density Estimation')
-    plt.xlabel('Value')
-    plt.ylabel('Cumulative Probability')
-    plt.legend()
-    plt.show()
+    # plt.figure(figsize=(10, 6))
+    # plt.plot(x_values, cdf_values, label='CDF', color='blue')
+    # plt.title('CDF from Kernel Density Estimation')
+    # plt.xlabel('Value')
+    # plt.ylabel('Cumulative Probability')
+    # plt.legend()
+    # plt.show()
 
     # Print bandwidth
     print(f"Bandwidth of KDE: {kde.factor}")
@@ -67,7 +57,10 @@ def plot_egress_time_distribution2(et: pd.DataFrame, title: str = ""):
 
 
 if __name__ == '__main__':
-    from src.walk_time_dis import plot_egress_time_dis_all
+    # plot_egress_time_distribution2()
+    from src import config
 
-    plot_egress_time_dis_all()
+    config.load_config()
+    from scripts.analyze_egress import _check_egress_time_outlier_rejects
+    _check_egress_time_outlier_rejects(uid=1024)
     pass

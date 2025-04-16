@@ -25,7 +25,6 @@ from matplotlib import pyplot as plt
 import seaborn as sns
 
 from src import config
-from src.globals import AFC, K_PV
 from src.utils import read_, read_all, ts2tstr
 
 
@@ -99,6 +98,7 @@ def calculate_egress_time(df_last_seg: pd.DataFrame) -> pd.DataFrame:
         AssertionError: If the last segment found does not match the last segment in the path,
                         indicating a potential data inconsistency.
     """
+    from src.globals import AFC, K_PV
     filtered_AFC = AFC[np.isin(AFC[:, 0], df_last_seg.index)]
     egress_link = K_PV[len(K_PV) - 1 - np.unique(K_PV[:, 0][::-1], return_index=True)[1], :4]
     path_id_node1 = {link[0]: link[2] for link in egress_link}

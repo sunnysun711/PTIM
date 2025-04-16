@@ -24,7 +24,6 @@ from tqdm import tqdm
 
 from src import config
 from src.utils import ts2tstr, save_
-from src.globals import K_PV_DICT, TT, AFC
 
 
 def find_trains(nid1: int, nid2: int, ts1: int, ts2: int, line: int, upd: int) -> list[tuple[int, int, int]]:
@@ -37,6 +36,7 @@ def find_trains(nid1: int, nid2: int, ts1: int, ts2: int, line: int, upd: int) -
     assert ts1 < ts2, f"ts1 should be smaller than ts2: {ts1}, {ts2}"
 
     # filter line
+    from src.globals import TT
     start_idx, end_idx = np.searchsorted(TT[:, 2], [line, line + 1])
     tt: np.ndarray[int] = TT[start_idx:end_idx]
 
@@ -275,6 +275,7 @@ def find_feas_iti_all(save_feas_iti: bool = True, save_afc_no_iti: bool = True) 
     :return: pd.DataFrame containing feasible itineraries.
         columns: ['rid', 'iti_id', 'path_id','seg_id', 'train_id', 'board_ts', 'alight_ts']
     """
+    from src.globals import K_PV_DICT, AFC
     data = []
     for rid, uid1, ts1, uid2, ts2 in tqdm(AFC, total=AFC.shape[0], desc="Finding feasible itineraries"):
         k_pv = K_PV_DICT[(uid1, uid2)]
