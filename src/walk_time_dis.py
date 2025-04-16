@@ -187,20 +187,19 @@ def get_egress_link_groups(
 
 def get_reject_outlier_bd(data: np.ndarray, method: str = "zscore", abs_max: int = None) -> tuple[float, float]:
     """
-    reject outliers of data using zscore or boxplot method
+    Calculate bounds for outlier rejection.
     see:
         boxplot: https://www.secrss.com/articles/11994
         zscore: https://www.zhihu.com/question/38066650
 
-    :param data:
-    :param method: using what method to delete outliers.
-    :param abs_max: absolute max value of data. If data > abs_max, delete it.
-    :return:
-    """
-    # Initialize bounds
-    lower_bound, upper_bound = 0, 500
+    :param data: Input data array.
+    :param method: Outlier detection method ('zscore' or 'boxplot').
+    :param abs_max: Absolute maximum value constraint.
+    :return: A tuple of lower and upper bounds for valid data.
 
-    # First reject outliers by method
+    Raises:
+        Exception: If an invalid method is provided.
+    """
     if method == "boxplot":
         miu = np.mean(data)
         Q1 = np.percentile(data, 25)
@@ -213,15 +212,32 @@ def get_reject_outlier_bd(data: np.ndarray, method: str = "zscore", abs_max: int
     else:
         raise Exception("Please use either boxplot or zscore method to reject outliers!")
 
-    # Then reject outliers manually
+    # manual bound
     if abs_max:
         upper_bound = min(upper_bound, abs_max)
+    lower_bound = max(lower_bound, 0)
 
     return lower_bound, upper_bound
 
 
 def plot_egress_time_dis(egress_time: np.ndarray, alight_ts: np.ndarray, title: str = "", show_: bool = True):
+    """
+    Visualize egress time distribution through a composite plot containing:
+    - Scatter plot of egress times vs alighting times
+    - Histogram of egress time distribution
+    - Boxplot of egress times by time bins
+
+    Parameters:
+        egress_time (np.ndarray): Array of egress times in seconds
+        alight_ts (np.ndarray): Array of alighting timestamps in seconds since midnight
+        title (str): Additional title text for the plot
+        show_ (bool): If True, displays the plot; if False, saves to PDF
+    """
     # Set up the figure and axes for the grid layout
+    # Creates a 2x2 grid with:
+    # - Top-left: scatter plot (80% width)
+    # - Top-right: histogram (20% width)
+    # - Bottom-left: boxplot (full width)
     fig = plt.figure(figsize=(15, 8))
     grid = plt.GridSpec(2, 2, height_ratios=[4, 1], width_ratios=[1, 0.25])
 
@@ -231,11 +247,12 @@ def plot_egress_time_dis(egress_time: np.ndarray, alight_ts: np.ndarray, title: 
     ax_hist_right.set_xlabel("Frequency")
     ax_hist_right.set_ylabel("")
 
-    # Scatter plot in the center
+    # Scatter plot showing relationship between alighting time and egress time
     ax_scatter = fig.add_subplot(grid[0, 0], sharey=ax_hist_right)
     ax_scatter.scatter(alight_ts, egress_time, alpha=0.4)
     # ax_scatter.set_xlabel("Alight Timestamp")
     ax_scatter.set_ylabel("Egress Time")
+    # Set x-axis ticks to show hourly labels from 6:00 to 24:00
     ax_scatter.set_xticks(range(6 * 3600, 24 * 3600 + 1, 3600))
     ax_scatter.set_xticklabels([f"{i:02}:00" for i in range(6, 25, 1)])
     ax_scatter.set_xlim(6 * 3600, 24 * 3600)
@@ -249,17 +266,19 @@ def plot_egress_time_dis(egress_time: np.ndarray, alight_ts: np.ndarray, title: 
     sns.boxplot(x=alight_ts_binned, y=egress_time, ax=ax_box)
     ax_box.set_xlabel(f"Alight Timestamp")
     ax_box.set_ylabel("Egress Time")
+    # Set x-axis ticks to show 30-minute intervals
     ax_box.set_xticks([i - 0.5 for i in range((24 - 6) * 3600 // _bin_width + 1)])
     ax_box.set_xticklabels([ts2tstr(ts) for ts in range(6 * 3600, 24 * 3600 + 1, _bin_width)])
     ax_box.set_xlim(- 0.5, (24 - 6) * 3600 // _bin_width - 0.5)
+    # Rotate x-axis labels for better readability
     for label in ax_box.get_xticklabels():
         label.set_rotation(90)
 
     plt.tight_layout()
-    if show_:  # Show the plot
+    if show_:  # Show the plot interactively
         plt.show()
-    else:  # Save the plot
-        fig.savefig(fname=f"figures/egress_time_dis_{title}.pdf", dpi=600)
+    else:  # Save the plot to PDF file
+        fig.savefig(fname=f"{config.CONFIG['figure_folder']}/egress_time_dis_{title}.pdf", dpi=600)
         plt.clf()
     return
 
@@ -279,8 +298,9 @@ def plot_egress_time_dis_all():
             et = et[(et['egress_time'] >= lb) & (et['egress_time'] <= ub)]
             print(f"Bounded by [{lb}, {ub}]: ", et.shape[0])
 
+            title = f"{uid}_{[i[0] for i in egress_links]}"
             plot_egress_time_dis(
-                egress_time=et['egress_time'].values, alight_ts=et['alight_ts'].values, title=f"{egress_links}",
+                egress_time=et['egress_time'].values, alight_ts=et['alight_ts'].values, title=title,
                 show_=False  # save
             )
     return
