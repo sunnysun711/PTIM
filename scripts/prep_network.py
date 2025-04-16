@@ -14,13 +14,15 @@ Dependencies:
 """
 import pandas as pd
 
-from src.utils import execution_timer, file_saver, read_data
+from src import config
+from src.utils import execution_timer, read_, save_
 from src.metro_net import gen_links, gen_node_from_sta, ChengduMetro, nx
 
 
 def _test_k_paths():
     """Test the find_k_paths_via_yen function. Check if `_check_path_feas` works."""
-    node, link = read_data("node_info", show_timer=False), read_data("link_info", show_timer=False)
+    node = read_(config.CONFIG["results"]["node"], show_timer=False)
+    link = read_(config.CONFIG["results"]["link"], show_timer=False)
     net = ChengduMetro(nodes=node, links=link)
 
     # net.find_all_pairs_k_paths()
@@ -39,30 +41,35 @@ def _test_k_paths():
     return
 
 
-def get_node_and_link(read_: bool) -> tuple[pd.DataFrame, pd.DataFrame]:
-    if not read_:
+def get_node_and_link(read_on: bool) -> tuple[pd.DataFrame, pd.DataFrame]:
+    if not read_on:
         # generate node and link files
-        nodes = gen_node_from_sta(save_fn="node_info")
-        links = gen_links(save_fn="link_info")
+        node = gen_node_from_sta(save_on=True)
+        link = gen_links(save_on=True)
     else:
-        nodes = read_data("node_info")
-        links = read_data("link_info")
-    return nodes, links
+        node = read_(config.CONFIG["results"]["node"], show_timer=False)
+        link = read_(config.CONFIG["results"]["link"], show_timer=False)
+    return node, link
 
 
 @execution_timer
 def gen_path(nodes: pd.DataFrame, links: pd.DataFrame):
     # generate k-paths files
     net = ChengduMetro(nodes=nodes, links=links)
-    df_p, df_pv = net.find_all_pairs_k_paths()  # takes 3 hours to run
-    file_saver(lambda save_fn: df_p)(save_fn="path")
-    file_saver(lambda save_fn: df_pv)(save_fn="pathvia")
+    df_p, df_pv = net.find_all_pairs_k_paths(
+        k=config.CONFIG["parameters"]["k"],
+        theta1=config.CONFIG["parameters"]["theta1"],
+        theta2=config.CONFIG["parameters"]["theta2"],
+        transfer_deviation=config.CONFIG["parameters"]["transfer_deviation"]
+    )  # takes 3 hours to run
+    save_(config.CONFIG["results"]["path"], df_p, auto_index_on=False)
+    save_(config.CONFIG["results"]["pathvia"], df_pv, auto_index_on=False)
     return
 
 
-def main():
+def main(read_network: bool):
     print("\033[33m"
-          "======================================================================================"
+          "======================================================================================\n"
           "[INFO] This script prepares the metro network structure for pathfinding.\n"
           "       It generates nodes, links, k-shortest paths, and their segment breakdowns.\n"
           "       Key Outputs:\n"
@@ -75,7 +82,7 @@ def main():
     print("\033[33m"
           "[INFO] Generating node and link files...\n"
           "\033[0m")
-    nodes, links = get_node_and_link(read_=False)
+    nodes, links = get_node_and_link(read_on=read_network)
     print("\033[33m"
           "[INFO] Generating path and pathvia files...\n"
           "\033[0m")

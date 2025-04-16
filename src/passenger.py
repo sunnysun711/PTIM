@@ -22,7 +22,8 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from src.utils import read_data, file_saver, ts2tstr
+from src import config
+from src.utils import ts2tstr, save_
 from src.globals import K_PV_DICT, TT, AFC
 
 
@@ -261,8 +262,7 @@ def plot_seg_trains(k_pv: np.ndarray, ts1: int, ts2: int):
     return
 
 
-@file_saver
-def find_feas_iti_all(save_fn: str = None) -> pd.DataFrame:
+def find_feas_iti_all(save_feas_iti: bool = True, save_afc_no_iti: bool = True) -> pd.DataFrame:
     """
     Main function to find feasible itineraries for all passengers and save results.
     This function will generate two dataframes:
@@ -284,8 +284,7 @@ def find_feas_iti_all(save_fn: str = None) -> pd.DataFrame:
             for seg_id, (train_id, board_ts, alight_ts) in enumerate(itinerary[1:], start=1):
                 data.append([rid, iti_id, path_id, seg_id, train_id, board_ts, alight_ts])
 
-    @file_saver
-    def _save_rids_not_found(save_fn: str = None) -> pd.DataFrame | None:
+    def _save_rids_not_found() -> pd.DataFrame | None:
         """Helper function to save records of passengers without feasible itineraries."""
         if not data:
             print("All passengers have feasible itineraries.")
@@ -298,7 +297,10 @@ def find_feas_iti_all(save_fn: str = None) -> pd.DataFrame:
         print(f"Not found feasible itinerary: {len(rids_not_found)} passengers.")
         return df_rids_not_found
 
-    _save_rids_not_found(save_fn="AFC_feas_iti_not_found")  # save rids without feasible itineraries
+    if save_afc_no_iti:  # save rids without feasible itineraries
+        iti_not_found = _save_rids_not_found()
+        if iti_not_found is not None:
+            save_(fn=config.CONFIG["results"]["AFC_no_iti"], data=iti_not_found, auto_index_on=False)
 
     data = np.array(data, dtype=np.int32)
 
@@ -315,5 +317,8 @@ def find_feas_iti_all(save_fn: str = None) -> pd.DataFrame:
         'board_ts': 'int32',
         'alight_ts': 'int32'
     })
+
+    if save_feas_iti:
+        save_(fn=config.CONFIG["results"]["feas_iti"], data=df, auto_index_on=False)
 
     return df

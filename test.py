@@ -1,39 +1,73 @@
 # to test and implement GPT-generated code
+
+import matplotlib.pyplot as plt
+from src import config
+
+config.load_config()
+from src.utils import ts2tstr, read_
+from scripts.analyze_egress import save_egress_times
 import pandas as pd
+import seaborn as sns
+import matplotlib
 
-from src.utils import read_data, file_saver
+from src.walk_time_dis import get_egress_link_groups
+
+matplotlib.use('TkAgg')
 
 
-def find_rids_with_same_final_train_in_all_itis():
-    """
-    Find rids in feas_iti_left.pkl where all feasible itineraries share the same final train (same train_id & alight_ts).
+def plot_egress_time_distribution2(et: pd.DataFrame, title: str = ""):
+    import numpy as np
+    from scipy.stats import gaussian_kde
+    from scipy.integrate import quad
+    import matplotlib.pyplot as plt
+    import seaborn as sns
 
-    Returns
-    -------
-    pd.DataFrame
-        Subset of feas_iti_left containing only those rids whose all iti end with the same train.
-    """
-    df = read_data("feas_iti_left")
+    # Generate two groups of normal distribution data
+    np.random.seed(42)
+    data1 = np.random.normal(loc=10, scale=2, size=300)
+    data2 = np.random.normal(loc=20, scale=3, size=200)
+    combined_data = np.concatenate([data1, data2])
 
-    # Keep only the last segment for each rid + iti_id
-    # last_seg = df.sort_values("seg_id").groupby(["rid", "iti_id"]).tail(1)
-    last_seg = df.groupby(["rid", "iti_id"]).last().reset_index()
+    # Perform KDE
+    kde = gaussian_kde(combined_data)
 
-    # 对每个 rid，聚合 (train_id, alight_ts) 为元组，统计唯一值数量
-    last_seg["train_end"] = list(zip(last_seg["train_id"], last_seg["alight_ts"]))
-    unique_end_count = last_seg.groupby("rid")["train_end"].nunique()
+    # Define the range for the variable
+    x_min, x_max = 5, 25  # Limit the range to [5, 25]
+    x_values = np.linspace(x_min, x_max, 1000)
 
-    # 筛选所有 iti 最终列车一致的 rid
-    consistent_rids = unique_end_count[unique_end_count == 1].index
+    # Compute PDF
+    pdf_values = kde(x_values)
 
-    return df[df["rid"].isin(consistent_rids)]
+    # Compute CDF using numerical integration
+    cdf_values = [quad(kde, x_min, x)[0] for x in x_values]
+
+    # Plot PDF
+    plt.figure(figsize=(10, 6))
+    sns.histplot(combined_data, kde=False, bins=30,
+                 stat='density', label='Histogram')
+    plt.plot(x_values, pdf_values, label='PDF (KDE)', color='red')
+    plt.title('PDF with Kernel Density Estimation')
+    plt.xlabel('Value')
+    plt.ylabel('Density')
+    plt.legend()
+    plt.show()
+
+    # Plot CDF
+    plt.figure(figsize=(10, 6))
+    plt.plot(x_values, cdf_values, label='CDF', color='blue')
+    plt.title('CDF from Kernel Density Estimation')
+    plt.xlabel('Value')
+    plt.ylabel('Cumulative Probability')
+    plt.legend()
+    plt.show()
+
+    # Print bandwidth
+    print(f"Bandwidth of KDE: {kde.factor}")
+    return
 
 
 if __name__ == '__main__':
-    # df = find_rids_with_same_final_train_in_all_itis()
-    # print(df.sample(n=20))
-    # from scripts.find_feas_iti import _plot_check_feas_iti
-    # _plot_check_feas_iti(rid=347627)
-    KPV = read_data("pathvia")
-    print(KPV[KPV['path_id'].isin([1136109701, 1136109702, 1136109703])])
+    from src.walk_time_dis import plot_egress_time_dis_all
+
+    plot_egress_time_dis_all()
     pass

@@ -5,22 +5,16 @@ based on k-shortest path and train timetable data.
 Key Steps:
 1. find_feas_iti_all:
     - Generates feas_iti.pkl: All feasible itineraries for passengers.
-    - Optionally outputs AFC_feas_iti_not_found.pkl: Records without feasible paths.
-2. split_feas_iti:
-    - Splits feas_iti.pkl into:
-        - feas_iti_assigned.pkl (1 itinerary per rid)
-        - feas_iti_stashed.pkl (too many itineraries, > threshold)
-        - feas_iti_left.pkl (between 2 and threshold)
-3. _plot_check_feas_iti:
+    - Outputs AFC_no_iti.pkl: Records without feasible paths.
+2. _plot_check_feas_iti:
     - Visual debug utility to visualize feasible trains for a single passenger.
 
 Usage:
-- Run main() to generate and split itineraries.
+- Run main() to generate itineraries.
 - Optionally use _plot_check_feas_iti() to inspect specific cases.
 
 Dependencies:
 - src.passenger
-- src.trajectory
 - globals (K_PV_DICT, AFC)
 
 Data Sources:
@@ -32,13 +26,11 @@ Data Sources:
 import numpy as np
 
 from src.passenger import find_feas_iti_all
-from src.trajectory import split_feas_iti
 
 
 def _plot_check_feas_iti(rid: int = None):
     """Test function for feasible itineraries found."""
-    from src.globals import AFC, K_PV_DICT
-    from src.passenger import plot_seg_trains, find_feas_iti
+    from src.passenger import AFC, K_PV_DICT, plot_seg_trains, find_feas_iti
 
     if rid is None:
         rid, uid1, ts1, uid2, ts2 = AFC[np.random.choice(len(AFC))].flatten().tolist()
@@ -59,21 +51,14 @@ def _plot_check_feas_iti(rid: int = None):
 
 def main():
     print("\033[33m"
-          "======================================================================================"
-          "[INFO] This script finds feasible itineraries for passengers and splits them into \n"
-          "       three categories:\n"
-          "       1. feas_iti_assigned.pkl: Only one feasible itinerary per rid.\n"
-          "       2. feas_iti_stashed.pkl: More than `feas_iti_cnt_limit` feasible itineraries \n"
-          "          per rid.\n"
-          "       3. feas_iti_left.pkl: Less than `feas_iti_cnt_limit` but more than 1 feasible \n"
-          "          itineraries per rid.\n"
+          "======================================================================================\n"
+          "[INFO] This script finds feasible itineraries for passengers and generates two files:\n"
+          "       1. feas_iti.pkl: columns are: ['rid', 'iti_id', 'path_id','seg_id', 'train_id',\n"
+          "                        'board_ts', 'alight_ts'].\n"
+          "       2. AFC_no_iti.pkl: structure same as AFC. \n"
           "======================================================================================"
           "\033[0m")
-    print("\033[33m"
-          "[INFO] Running find_feas_iti_all and split_feas_iti(1000)...\n"
-          "\033[0m")
-    find_feas_iti_all(save_fn="feas_iti")  # takes 10 minutes to run
-    split_feas_iti(feas_iti_cnt_limit=1000)  # split feas_iti.pkl into three files
+    find_feas_iti_all()  # takes 10 minutes to run
     return
 
 

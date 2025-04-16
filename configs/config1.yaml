@@ -1,0 +1,50 @@
+data_folder: "data"
+data:
+  - "AFC.pkl"
+  - "TT.pkl"
+  - "STA.pkl"
+  - "platform.json"
+  - "coordinates.csv"
+
+results_folder: "results"
+results_subfolder:
+  network: "network"
+  path: "path"
+  itinerary: "itinerary"
+  egress: "egress"
+  trajectory: "trajectory"
+results:
+  node: "node_info.pkl"
+  link: "link_info.pkl"
+  path: "path.pkl"
+  pathvia: "pathvia.pkl"
+  feas_iti: "feas_iti.pkl"
+  AFC_no_iti: "AFC_no_iti.pkl"
+  egress_times: "egress_times.pkl"
+  assigned: "assigned.pkl"
+  left: "left.pkl"
+  stashed: "stashed.pkl"
+
+figure_folder: "figures"
+
+use_existing:
+  network: true
+  path: true
+  itinerary: true
+  trajectory: true
+
+parameters:
+  # parameters for path
+  k: 10
+  theta1: 0.6
+  theta2: 600
+  transfer_deviation: 2
+  # parameters for itinerary
+  feas_iti_cnt_limit: 1000
+  # parameters for egress
+  distribution_type: "kde"  # "kde" or "gamma"
+  # parameters for trajectory
+  strategy: "random"  # "random" or "greedy"
+  step_size: 100
+
+
