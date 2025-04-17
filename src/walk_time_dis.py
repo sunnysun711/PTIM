@@ -17,6 +17,7 @@ Import and call the following functions as needed:
 - `get_cdf()`: Calculate CDF from walking time samples.
 """
 import os
+from typing import Callable
 
 import numpy as np
 import pandas as pd
@@ -337,7 +338,26 @@ def plot_egress_time_dis_all(save_subfolder: str = "", et_: pd.DataFrame = None,
     return
 
 
-def fit_walk_time_distribution():
+def fit_pdf_cdf(data: np.ndarray, method: str = "kde") -> tuple[Callable, Callable]:
+    if method == "kde":
+        from scipy.stats import gaussian_kde
+        kde = gaussian_kde(data)
+        return kde, lambda x_values: np.array([kde.integrate_box_1d(0, x) for x in x_values])
+    elif method == "gamma":
+        from scipy.stats import gamma
+        params = gamma.fit(data, floc=0)
+        print(params)
+        return lambda x: gamma.pdf(x, *params), lambda x: gamma.cdf(x, *params)
+    elif method == "lognorm":
+        from scipy.stats import lognorm
+        params = lognorm.fit(data)
+        print(params)
+        return lambda x: lognorm(*params).pdf(x), lambda x: lognorm(*params).cdf(x)
+    else:
+        raise Exception("Please use either kde, gamma, or lognorm method to fit pdf!")
+
+
+def fit_walk_time_distribution(data: np.ndarray, method: str = "kde", ):
     ...
 
 
