@@ -16,6 +16,8 @@ Import and call the following functions as needed:
 - `get_pdf()`: Calculate PDF from walking time samples.
 - `get_cdf()`: Calculate CDF from walking time samples.
 """
+import os
+
 import numpy as np
 import pandas as pd
 import matplotlib
@@ -220,7 +222,9 @@ def get_reject_outlier_bd(data: np.ndarray, method: str = "zscore", abs_max: int
     return lower_bound, upper_bound
 
 
-def plot_egress_time_dis(egress_time: np.ndarray, alight_ts: np.ndarray, title: str = "", show_: bool = True):
+def plot_egress_time_dis(
+        egress_time: np.ndarray, alight_ts: np.ndarray, title: str = "", show_: bool = True
+) -> None | plt.Figure:
     """
     Visualize egress time distribution through a composite plot containing:
     - Scatter plot of egress times vs alighting times
@@ -277,32 +281,59 @@ def plot_egress_time_dis(egress_time: np.ndarray, alight_ts: np.ndarray, title: 
     plt.tight_layout()
     if show_:  # Show the plot interactively
         plt.show()
-    else:  # Save the plot to PDF file
-        fig.savefig(fname=f"{config.CONFIG['figure_folder']}/egress_time_dis_{title}.pdf", dpi=600)
-        plt.clf()
-    return
+        return None
+    else:
+        return fig
 
 
-def plot_egress_time_dis_all():
-    et_ = read_(fn="egress_times_1", show_timer=False, latest_=False)
+def plot_egress_time_dis_all(save_subfolder: str = "", et_: pd.DataFrame = None, save_on: bool = True):
+    """
+    Generates and saves egress time distribution plots for all platform links, including scatter plots,
+    histograms, and boxplots. The plots visualize the relationship between egress times and alighting
+    timestamps, with outliers rejected based on z-score method.
+
+    This function processes the egress time data for different platform links, applies outlier rejection
+    to the egress time data, and generates a plot for each platform. The plots are saved as PDF and PNG
+    files to the specified directory.
+
+    Parameters:
+        save_subfolder (str): The subfolder where plots will be saved. If not specified, plots are saved
+                               in the default figure folder.
+        et_ (pd.DataFrame): Optional DataFrame containing egress time data. If not provided, the function
+                            attempts to read the data from a file.
+        save_on (bool): If True, the plots are saved to files. If False, the plots are returned as figure
+                        objects for further use or analysis.
+
+    Returns:
+        None
+    """
+    et_ = et_ if et_ is not None else read_(fn="egress_times_1.pkl", show_timer=False)
     et__ = et_.set_index(["node1", "node2"])
+
+    saving_dir = config.CONFIG["figure_folder"] + "/" + save_subfolder
+    if save_subfolder and not os.path.exists(saving_dir):
+        os.makedirs(saving_dir)
+
     for uid, platform_links in get_egress_link_groups(et_=et_).items():
-        print(uid, platform_links)
         for egress_links in platform_links:
             # all egress links on the same platform
             et = et__[et__.index.isin(egress_links)]
             if et.shape[0] == 0:
                 continue
-            print("Data size: ", et.shape[0], egress_links)
+            title = f"{uid}_{[i[0] for i in egress_links]}"
+            raw_size = et.shape[0]
             lb, ub = get_reject_outlier_bd(data=et['egress_time'].values, method="zscore", abs_max=500)
             et = et[(et['egress_time'] >= lb) & (et['egress_time'] <= ub)]
-            print(f"Bounded by [{lb}, {ub}]: ", et.shape[0])
+            print(f"{title} | Data size: {et.shape[0]}/{raw_size} | BD: [{lb:.4f}, {ub:.4f}]")
 
-            title = f"{uid}_{[i[0] for i in egress_links]}"
-            plot_egress_time_dis(
+            fig = plot_egress_time_dis(
                 egress_time=et['egress_time'].values, alight_ts=et['alight_ts'].values, title=title,
-                show_=False  # save
+                show_=not save_on  # return figure if not showing; return None if showing
             )
+            if fig is not None:  # Save the plot to PDF file and a small png file for preview
+                fig.savefig(fname=f"{saving_dir}/ETD_{title}.pdf", dpi=600)
+                fig.savefig(fname=f"{saving_dir}/ETD_{title}.png", dpi=200)
+                plt.close(fig)
     return
 
 

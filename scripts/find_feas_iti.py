@@ -30,7 +30,8 @@ from src.passenger import find_feas_iti_all
 
 def _plot_check_feas_iti(rid: int = None):
     """Test function for feasible itineraries found."""
-    from src.passenger import AFC, K_PV_DICT, plot_seg_trains, find_feas_iti
+    from src.passenger import plot_seg_trains, find_feas_iti
+    from src.globals import AFC, K_PV_DICT
 
     if rid is None:
         rid, uid1, ts1, uid2, ts2 = AFC[np.random.choice(len(AFC))].flatten().tolist()
