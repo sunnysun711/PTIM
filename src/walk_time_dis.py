@@ -243,40 +243,58 @@ def plot_egress_time_dis(
     # - Top-left: scatter plot (80% width)
     # - Top-right: histogram (20% width)
     # - Bottom-left: boxplot (full width)
-    fig = plt.figure(figsize=(15, 8))
+    fig = plt.figure(figsize=(10, 6))
     grid = plt.GridSpec(2, 2, height_ratios=[4, 1], width_ratios=[1, 0.25])
 
     # Histogram of the egress time distribution (all day)
-    ax_hist_right = fig.add_subplot(grid[0, 1])
-    sns.histplot(y=egress_time, kde=True, ax=ax_hist_right, color="blue", bins=30)
-    ax_hist_right.set_xlabel("Frequency")
-    ax_hist_right.set_ylabel("")
+    ax_right = fig.add_subplot(grid[0, 1])
+    # check usage: https://seaborn.pydata.org/generated/seaborn.histplot.html
+    sns.histplot(
+        y=egress_time, kde=False, ax=ax_right, color="blue", alpha=0.3, bins=30, stat='density', element="step")
+    sns.kdeplot(y=egress_time, ax=ax_right, color="red", lw=1, label="KDE Fit")
+
+    # to show all fits
+    gamma_pdf, _ = fit_pdf_cdf(egress_time, method="gamma")
+    lognorm_pdf, _ = fit_pdf_cdf(egress_time, method="lognorm")
+    x_values = np.linspace(0, 500, 501)
+    ax_right.plot(
+        gamma_pdf(x_values), x_values, color="green", label="Gamma Fit", lw=1
+    )
+    ax_right.plot(
+        lognorm_pdf(x_values), x_values, color="orange", label="LogNormal Fit", lw=1
+    )
+
+    ax_right.set_xlabel("Density")
+    ax_right.set_ylabel("")
+    ax_right.legend()
 
     # Scatter plot showing relationship between alighting time and egress time
-    ax_scatter = fig.add_subplot(grid[0, 0], sharey=ax_hist_right)
-    ax_scatter.scatter(alight_ts, egress_time, alpha=0.4)
+    ax_main = fig.add_subplot(grid[0, 0], sharey=ax_right)
+    ax_main.scatter(alight_ts, egress_time, alpha=0.4)
     # ax_scatter.set_xlabel("Alight Timestamp")
-    ax_scatter.set_ylabel("Egress Time")
+    ax_main.set_ylabel("Egress Time")
     # Set x-axis ticks to show hourly labels from 6:00 to 24:00
-    ax_scatter.set_xticks(range(6 * 3600, 24 * 3600 + 1, 3600))
-    ax_scatter.set_xticklabels([f"{i:02}:00" for i in range(6, 25, 1)])
-    ax_scatter.set_xlim(6 * 3600, 24 * 3600)
-    ax_scatter.set_title("Egress Time Distribution " + title)
+    ax_main.set_xticks(range(6 * 3600, 24 * 3600 + 1, 3600))
+    ax_main.set_xticklabels([f"{i:02}" for i in range(6, 25, 1)])
+    ax_main.set_xlim(6 * 3600, 24 * 3600)
+    ax_main.set_ylim(egress_time.min() - 10, egress_time.max() + 10)
+    ax_main.set_title("Egress Time Distribution " + title)
+    ax_main.set_xlabel("Alight Timestamp (Hour)")
 
     # Boxplot of egress time versus alight_ts, with customized bin width
     _bin_width = 1800
     alight_ts_binned = (alight_ts // _bin_width) * _bin_width
 
-    ax_box = fig.add_subplot(grid[1, 0])
-    sns.boxplot(x=alight_ts_binned, y=egress_time, ax=ax_box)
-    ax_box.set_xlabel(f"Alight Timestamp")
-    ax_box.set_ylabel("Egress Time")
+    ax_bottom = fig.add_subplot(grid[1, 0])
+    sns.boxplot(x=alight_ts_binned, y=egress_time, ax=ax_bottom)
+    ax_bottom.set_xlabel(f"Alight Timestamp")
+    ax_bottom.set_ylabel("Egress Time")
     # Set x-axis ticks to show 30-minute intervals
-    ax_box.set_xticks([i - 0.5 for i in range((24 - 6) * 3600 // _bin_width + 1)])
-    ax_box.set_xticklabels([ts2tstr(ts) for ts in range(6 * 3600, 24 * 3600 + 1, _bin_width)])
-    ax_box.set_xlim(- 0.5, (24 - 6) * 3600 // _bin_width - 0.5)
+    ax_bottom.set_xticks([i - 0.5 for i in range((24 - 6) * 3600 // _bin_width + 1)])
+    ax_bottom.set_xticklabels([ts2tstr(ts) for ts in range(6 * 3600, 24 * 3600 + 1, _bin_width)])
+    ax_bottom.set_xlim(- 0.5, (24 - 6) * 3600 // _bin_width - 0.5)
     # Rotate x-axis labels for better readability
-    for label in ax_box.get_xticklabels():
+    for label in ax_bottom.get_xticklabels():
         label.set_rotation(90)
 
     plt.tight_layout()
@@ -333,7 +351,7 @@ def plot_egress_time_dis_all(save_subfolder: str = "", et_: pd.DataFrame = None,
             )
             if fig is not None:  # Save the plot to PDF file and a small png file for preview
                 fig.savefig(fname=f"{saving_dir}/ETD_{title}.pdf", dpi=600)
-                fig.savefig(fname=f"{saving_dir}/ETD_{title}.png", dpi=200)
+                fig.savefig(fname=f"{saving_dir}/ETD_{title}.png", dpi=100)
                 plt.close(fig)
     return
 
@@ -346,12 +364,12 @@ def fit_pdf_cdf(data: np.ndarray, method: str = "kde") -> tuple[Callable, Callab
     elif method == "gamma":
         from scipy.stats import gamma
         params = gamma.fit(data, floc=0)
-        print(params)
+        # print(params)
         return lambda x: gamma.pdf(x, *params), lambda x: gamma.cdf(x, *params)
     elif method == "lognorm":
         from scipy.stats import lognorm
         params = lognorm.fit(data)
-        print(params)
+        # print(params)
         return lambda x: lognorm(*params).pdf(x), lambda x: lognorm(*params).cdf(x)
     else:
         raise Exception("Please use either kde, gamma, or lognorm method to fit pdf!")

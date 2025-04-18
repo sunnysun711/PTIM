@@ -7,7 +7,7 @@ from src.walk_time_dis import get_egress_time_from_feas_iti_left, get_egress_tim
     plot_egress_time_dis_all
 
 
-def _check_egress_time_outlier_rejects(uid: int = 1124):
+def _check_egress_time_outlier_rejects(uid: int = None):
     config.load_config()
     from src.utils import read_
     from src.walk_time_dis import get_egress_link_groups, get_reject_outlier_bd, plot_egress_time_dis
@@ -15,6 +15,7 @@ def _check_egress_time_outlier_rejects(uid: int = 1124):
     et_ = read_(fn="egress_times_1", show_timer=False, latest_=False)
     et__ = et_.set_index(["node1", "node2"])
 
+    uid = uid if uid else np.random.choice(range(1001, 1137), size=1)[0]
     # uid = 1018  # Tianfu 3th Road
     # uid = 1064  # Tianfu 5th Road
     # uid = 1123  # GuangDu
@@ -83,6 +84,7 @@ def main():
 
 
 if __name__ == '__main__':
+    config.load_config()
     # main()
-    # _check_egress_time_outlier_rejects(uid=1024)
+    _check_egress_time_outlier_rejects(uid=None)
     pass
