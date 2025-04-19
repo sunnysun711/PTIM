@@ -3,6 +3,7 @@ from typing import Callable
 
 import matplotlib
 import numpy as np
+import pandas as pd
 from scipy.stats import kstest
 
 matplotlib.use('TkAgg')
@@ -69,12 +70,13 @@ def plot_egress_time_distribution1():
 
     et_ = read_(fn="egress_times_1", show_timer=False, latest_=False)
     et__ = et_.set_index(["node1", "node2"])
-    # uid = np.random.choice(range(1001, 1137), size=1)[0]
+    uid = np.random.choice(range(1001, 1137), size=1)[0]
     # uid = 1033
-    uid = 1065
+    # uid = 1065
     # uid = 1064
     platform_links = get_egress_link_groups(et_=et_)[uid]
     print(uid, platform_links)
+
 
     for egress_links in platform_links:
         # all egress links on the same platform
@@ -93,26 +95,28 @@ def plot_egress_time_distribution1():
         # Perform KDE
         from src.walk_time_dis import fit_pdf_cdf
         methods = ["kde", "lognorm", "gamma"]
-        pdf_f, cdf_f = fit_pdf_cdf(data, method="lognorm")
-
         x_values = np.linspace(0, 500, 501)
 
-        # Compute PDF  ~ 0.4 s
-        pdf_values = pdf_f(x_values)
+        fit_results: dict = {"uid": uid, "x": x_values}
+        for met in methods:
+            pdf_f, cdf_f = fit_pdf_cdf(data, method=met)
+            print(f"Method: {met}")
+            # Compute PDF  ~ 0.4 s
+            pdf_values = pdf_f(x_values)
 
-        # Compute CDF using numerical integration
-        cdf_values = cdf_f(x_values)
-        cdf_values = cdf_values / cdf_values[-1]  # scale to [0, 1] for some not-fit-well data
+            # Compute CDF using numerical integration
+            cdf_values = cdf_f(x_values)
+            cdf_values = cdf_values / cdf_values[-1]  # scale to [0, 1] for some not-fit-well data
 
-        import pandas as pd
-        res = pd.DataFrame({
-            "uid": [uid] * len(x_values),
-            "x": x_values,
-            "pdf": pdf_values,
-            "cdf": cdf_values
-        })
-        print(res.head(20))
-        print(res.tail(20))
+            kstest = evaluate_fit(data=data, pdf_func=pdf_f, cdf_func=cdf_f)
+            # fit_results.append([x_values, pdf_values, cdf_values, kstest["ks_stat"], kstest["ks_p_value"]])
+            fit_results[f"pdf_{met}"] = pdf_values
+            fit_results[f"cdf_{met}"] = cdf_values
+            fit_results[f"ks_stat_{met}"] = kstest["ks_stat"]
+            fit_results[f"ks_p_value_{met}"] = kstest["ks_p_value"]
+            print(fit_results)
+
+        print(pd.DataFrame(fit_results))
 
         # Plot PDF
         plt.figure(figsize=(10, 6))
@@ -132,18 +136,10 @@ def plot_egress_time_distribution1():
         plt.legend()
         plt.show()
 
-        # Calculate KDE fit quality
-        mse = calculate_kde_fit_quality(data, pdf_f, x_values)  # todo: fix bugs always zero
-        print(f"KDE Fit Quality (MSE): {mse:.4f}")
-
-        print(evaluate_fit(data=data, pdf_func=pdf_f, cdf_func=cdf_f))
-
-        # print(f"Bandwidth of KDE: {pdf_f.factor}")
-
-        # todo: 因为数据精度为1秒，所以需要：
+        # 因为数据精度为1秒，所以需要：
         # 1. 衡量当前kde的拟合效果是否满足需求
         # 2. （不满足）调整kde的带宽参数或采用其他方法，使得kde的拟合效果满足要求
-        # 3. （满足）以1秒为单位，计算每个时间点的pdf值，并保存在: etd_1.pkl.中，index是uid，columns就是1-500秒。
+        # 3. （满足）以1秒为单位，计算每个时间点的pdf值，并保存在: ETD_{KDE, GAMMA, LOGNORM}_1.pkl.中，index: uid，columns: 0-500。
     return
 
 
@@ -226,5 +222,6 @@ def plot_egress_time_distribution2():
 
 
 if __name__ == '__main__':
-    plot_egress_time_distribution2()
+    # plot_egress_time_distribution2()
+    plot_egress_time_distribution1()
     pass

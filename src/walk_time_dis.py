@@ -236,7 +236,10 @@ def plot_egress_time_dis(
         egress_time (np.ndarray): Array of egress times in seconds
         alight_ts (np.ndarray): Array of alighting timestamps in seconds since midnight
         title (str): Additional title text for the plot
-        show_ (bool): If True, displays the plot; if False, saves to PDF
+        show_ (bool): If True, displays the plot; if False, return the figure object
+
+    Returns:
+        None or plt.Figure: If show_ is True, returns None; otherwise, returns the figure object
     """
     # Set up the figure and axes for the grid layout
     # Creates a 2x2 grid with:
@@ -249,22 +252,22 @@ def plot_egress_time_dis(
     # Histogram of the egress time distribution (all day)
     ax_right = fig.add_subplot(grid[0, 1])
     # check usage: https://seaborn.pydata.org/generated/seaborn.histplot.html
+    n_bins = 30
+    bin_width = (egress_time.max() - egress_time.min()) / n_bins
+    scale = bin_width * egress_time.size
     sns.histplot(
-        y=egress_time, kde=False, ax=ax_right, color="blue", alpha=0.3, bins=30, stat='density', element="step")
-    sns.kdeplot(y=egress_time, ax=ax_right, color="red", lw=1, label="KDE Fit")
+        y=egress_time, kde=False, ax=ax_right, color="blue", alpha=0.3, bins=n_bins, stat='count', element="bars")
+    x_values = np.linspace(0, 500, 501)
+    kde_pdf, _ = fit_pdf_cdf(egress_time, method="kde")
+    ax_right.plot(kde_pdf(x_values) * scale, x_values, color="red", label="KDE Fit", lw=1)
 
     # to show all fits
     gamma_pdf, _ = fit_pdf_cdf(egress_time, method="gamma")
     lognorm_pdf, _ = fit_pdf_cdf(egress_time, method="lognorm")
-    x_values = np.linspace(0, 500, 501)
-    ax_right.plot(
-        gamma_pdf(x_values), x_values, color="green", label="Gamma Fit", lw=1
-    )
-    ax_right.plot(
-        lognorm_pdf(x_values), x_values, color="orange", label="LogNormal Fit", lw=1
-    )
+    ax_right.plot(gamma_pdf(x_values) * scale, x_values, color="green", label="Gamma Fit", lw=1)
+    ax_right.plot(lognorm_pdf(x_values) * scale, x_values, color="orange", label="LogNormal Fit", lw=1)
 
-    ax_right.set_xlabel("Density")
+    ax_right.set_xlabel("Frequency")
     ax_right.set_ylabel("")
     ax_right.legend()
 
