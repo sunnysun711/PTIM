@@ -252,8 +252,6 @@ def read_(fn: str = "AFC", show_timer: bool = False, drop_cols: bool = True,
     >>> read_(fn="AFC", show_timer=True, drop_cols=True)
     [INFO] Reading file: data\AFC.pkl
 
-    >>> from src import config
-    >>> config.load_config()
     >>> read_("assigned.pkl", latest_=True)
     [INFO] Reading file: results\trajectory\assigned_1.pkl
 
