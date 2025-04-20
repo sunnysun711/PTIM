@@ -149,16 +149,36 @@ def determine_results_subfolder(fn: str) -> str:
     """
     Determines the subfolder for results files based on the file name.
     """
-    if fn in [config.CONFIG["results"]["node"], config.CONFIG["results"]["link"]]:
+    if fn in [
+        config.CONFIG["results"]["node"],
+        config.CONFIG["results"]["link"]
+    ]:
         return config.CONFIG["results_subfolder"]["network"]
-    elif fn in [config.CONFIG["results"]["path"], config.CONFIG["results"]["pathvia"]]:
+
+    elif fn in [
+        config.CONFIG["results"]["path"],
+        config.CONFIG["results"]["pathvia"]
+    ]:
         return config.CONFIG["results_subfolder"]["path"]
-    elif fn in [config.CONFIG["results"]["feas_iti"], config.CONFIG["results"]["AFC_no_iti"]]:
+
+    elif fn in [
+        config.CONFIG["results"]["feas_iti"],
+        config.CONFIG["results"]["AFC_no_iti"]
+    ]:
         return config.CONFIG["results_subfolder"]["itinerary"]
-    elif fn in [config.CONFIG["results"]["egress_times"]]:
+
+    elif fn in [
+        config.CONFIG["results"]["egress_times"],
+        config.CONFIG["results"]["physical_links"],
+        config.CONFIG["results"]["etd"]
+    ]:
         return config.CONFIG["results_subfolder"]["egress"]
-    elif fn in [config.CONFIG["results"]["assigned"], config.CONFIG["results"]["left"],
-                config.CONFIG["results"]["stashed"]]:
+
+    elif fn in [
+        config.CONFIG["results"]["assigned"],
+        config.CONFIG["results"]["left"],
+        config.CONFIG["results"]["stashed"]
+    ]:
         return config.CONFIG["results_subfolder"]["trajectory"]
     else:
         raise ValueError(f"Unknown file to determine results subfolder: {fn}")
@@ -278,8 +298,7 @@ def save_(fn: str, data: pd.DataFrame, auto_index_on: bool = False) -> None:
     Parameters:
     -----------
     fn : str
-        The name of the file. This should not include the `.pkl` extension. The function will save the data to the
-        appropriate directory based on the configuration.
+        The name of the file. The function will save the data to the appropriate directory based on the configuration.
 
     data : pd.DataFrame
         The pandas DataFrame to be saved.
@@ -296,12 +315,18 @@ def save_(fn: str, data: pd.DataFrame, auto_index_on: bool = False) -> None:
     Raises:
     -------
     ValueError
-        If the file extension is not `.pkl`.
+        If the file extension is not in `.pkl`, `.csv`, `.parquet`.
     """
     if len(fn.split(".")) == 1:  # No extension
         fn = f"{fn}.pkl"
-    if not fn.endswith(".pkl"):
-        raise ValueError("Only .pkl files can be saved using this method.")
+    if fn.endswith(".pkl"):
+        saving_method = data.to_pickle
+    elif fn.endswith(".csv"):
+        saving_method = data.to_csv
+    elif fn.endswith(".parquet"):
+        saving_method = data.to_parquet
+    else:
+        raise ValueError("Only .pkl, .csv, .parquet files can be saved using this method.")
 
     fp = get_file_path(fn)  # Use the same function to get the correct path
     if auto_index_on:
@@ -311,7 +336,7 @@ def save_(fn: str, data: pd.DataFrame, auto_index_on: bool = False) -> None:
     print(data.sample(n=min(10, len(data))))
     data.info()
 
-    data.to_pickle(fp)  # Save the DataFrame as a .pkl file
+    saving_method(fp)
     print(f"[INFO] File saved to: {fp}")
     return
 
