@@ -22,6 +22,9 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 import matplotlib
+from joblib import Parallel, delayed
+from scipy.stats import kstest
+from tqdm import tqdm
 
 matplotlib.use('TkAgg')
 from matplotlib import pyplot as plt
@@ -31,7 +34,7 @@ from src import config
 from src.utils import read_, read_all, ts2tstr
 
 
-def get_egress_time_from_feas_iti_left() -> pd.DataFrame:
+def get_egress_time_from_left() -> pd.DataFrame:
     """
     Find rids in left.pkl where all feasible itineraries share the same final train_id.
 
@@ -60,7 +63,7 @@ def get_egress_time_from_feas_iti_left() -> pd.DataFrame:
     return calculate_egress_time(last_seg)
 
 
-def get_egress_time_from_feas_iti_assigned() -> pd.DataFrame:
+def get_egress_time_from_assigned() -> pd.DataFrame:
     """
     Find rids in all assigned_*.pkl files where all feasible itineraries share the same final train_id.
 
@@ -101,9 +104,12 @@ def calculate_egress_time(df_last_seg: pd.DataFrame) -> pd.DataFrame:
         AssertionError: If the last segment found does not match the last segment in the path,
                         indicating a potential data inconsistency.
     """
-    from src.globals import AFC, K_PV
-    filtered_AFC = AFC[np.isin(AFC[:, 0], df_last_seg.index)]
-    egress_link = K_PV[len(K_PV) - 1 - np.unique(K_PV[:, 0][::-1], return_index=True)[1], :4]
+    from src.globals import get_afc, get_k_pv
+    afc = get_afc()
+    k_pv = get_k_pv()
+
+    filtered_AFC = afc[np.isin(afc[:, 0], df_last_seg.index)]
+    egress_link = k_pv[len(k_pv) - 1 - np.unique(k_pv[:, 0][::-1], return_index=True)[1], :4]
     path_id_node1 = {link[0]: link[2] for link in egress_link}
     path_id_node2 = {link[0]: link[3] for link in egress_link}
     df_last_seg['ts2'] = {record[0]: record[-1] for record in filtered_AFC}
@@ -116,79 +122,70 @@ def calculate_egress_time(df_last_seg: pd.DataFrame) -> pd.DataFrame:
     return df_last_seg[["node1", "node2", "alight_ts", "ts2", "egress_time"]]
 
 
-def get_egress_link_groups(
-        platform: dict = None,
-        et_: pd.DataFrame = None,
-) -> dict[int, list[list[tuple[int, int]]]]:
+def get_physical_links_info(et_: pd.DataFrame, platform: dict = None, ) -> np.ndarray:
     """
-    Generate egress link groups based on platform data and egress times.
-    This function groups the egress links for each station UID based on available platform data
-    and egress times for each rid. It returns a dictionary mapping each station UID to a list of
-    egress link groups. Each link group contains pairs of nodes that share same physical platforms.
+    Get information about physical links based on platform data and egress times.
+    This function generates a structured array containing information about each physical link.
+    Each row is an egress link (topological) with the following fields:
+        - 'pl_id': A unique identifier for each physical link.
+        - 'platform_id': The platform node_id of the egress link.
+        - 'uid': The station UID of the egress link.
 
-    :param platform: A dictionary mapping station UIDs to their corresponding platform node_ids (exceptions).
-        The structure of the dictionary is:
-                     {
-                         'UID': [[node_id_1, node_id_2], ...],
-                         ...
-                     }
-                     where `node_id_1`, `node_id_2` are platform nodes.
-        Defaults to the result of `read_(fn="platform.json", show_timer=False)`.
     :param et_: A DataFrame containing egress times for each rid.
         The DataFrame should have the following columns:
             - 'node2': The station UID of the egress path.
             - 'node1': The platform node_id of the egress path.
-        Defaults to the result of `read_(fn=f"egress_times_1.pkl", show_timer=False)`.
-    :return: A dictionary mapping each station UID to a list of egress link groups.
+
+    :param platform: A dictionary mapping station UIDs to their corresponding platform node_ids (exceptions).
         The structure of the dictionary is:
                      {
-                         'UID': [[(node_id_1, UID), (node_id_2, UID)],...],
+                         'UID': [[node_id_1, node_id_2],...],
                         ...
                      }
-        Example:
-                     {
-                         1031: [[(102241, 1031), (102240, 1031)]],
-                         1032: [[(104290, 1032), (102320, 1032)], [(104291, 1032), (102321, 1032)]],
-                         ...
-                     }
+                     where `node_id_1`, `node_id_2` are platform nodes.
+        Defaults to the result of `read_(fn="platform.json", show_timer=False)`.
 
-    Notes:
-        - Each link group is a list of tuples, where each tuple represents a link from node1 to uid.
-        - Links within the same list should share same physical platforms.
-        - If a station UID is not found in the egress times DataFrame, a message is printed and the UID is skipped.
-
+    :return: A structured array with the following fields:
+        - 'pl_id': A unique identifier for each physical link.
+        - 'platform_id': The platform node_id of the egress link.
+        - 'uid': The station UID of the egress link.
     """
     platform = platform if platform is not None else read_(fn="platform.json", show_timer=False)
     et_ = et_ if et_ is not None else read_(fn="egress_times_1.pkl", show_timer=False)
-    uid2linkgrp = {}
+
+    pl_id = 1
+    data = []  # [pl_id, platform_id, uid]
     for uid in range(1001, 1137):
         et = et_[et_["node2"] == uid]
         if et.shape[0] == 0:
             print(uid, "no egress times.")
             continue
-
         found_platforms = et.node1.unique()
-        if str(uid) in platform:
-            platform_values = platform[str(uid)]
-            link_grps = []
-            for sub_list in platform_values:
-                new_sub_list = [(id, uid) for id in sub_list if id in found_platforms]
-                if new_sub_list:
-                    link_grps.append(new_sub_list)
+        if uid in platform:
+            platform_groups = platform[uid]
+            for platform_group in platform_groups:
+                platform_group = [p_id for p_id in platform_group if p_id in found_platforms]
+                if len(platform_group) == 0:
+                    continue
+                for platform_id in platform_group:
+                    data.append([pl_id, platform_id, uid])
+                pl_id += 1
         else:
-            nid_dict = {}
+            nid_dict = {}  # nid -> [platform_id]
             for node1 in found_platforms:
                 nid = node1 // 10
                 if nid not in nid_dict:
                     nid_dict[nid] = []
-                nid_dict[nid].append((int(node1), uid))
+                nid_dict[nid].append(node1)
 
-            link_grps = list(nid_dict.values())
-        uid2linkgrp[uid] = link_grps
-    return uid2linkgrp
+            for nid, platform_ids in nid_dict.items():
+                for platform_id in platform_ids:
+                    data.append([pl_id, platform_id, uid])
+                pl_id += 1
+    return np.array(data)
 
 
-def get_reject_outlier_bd(data: np.ndarray, method: str = "zscore", abs_max: int = None) -> tuple[float, float]:
+def get_reject_outlier_bd(data: np.ndarray, method: str = "zscore", abs_max: int = 500) -> tuple[float, float]:
     """
     Calculate bounds for outlier rejection.
     see:
@@ -221,6 +218,25 @@ def get_reject_outlier_bd(data: np.ndarray, method: str = "zscore", abs_max: int
     lower_bound = max(lower_bound, 0)
 
     return lower_bound, upper_bound
+
+
+def reject_outliers(data: np.ndarray, method: str = "zscore", abs_max: int = 500) -> np.ndarray:
+    """
+    Reject outliers from the input data array based on the specified method.
+    see:
+        boxplot: https://www.secrss.com/articles/11994
+        zscore: https://www.zhihu.com/question/38066650
+
+    :param data: Input data array.
+    :param method: Outlier detection method ('zscore' or 'boxplot').
+    :param abs_max: Absolute maximum value constraint.
+    :return: cleaned data array.
+
+    Raises:
+        Exception: If an invalid method is provided.
+    """
+    lb, ub = get_reject_outlier_bd(data, method=method, abs_max=abs_max)
+    return data[(data >= lb) & (data <= ub)]
 
 
 def plot_egress_time_dis(
@@ -308,7 +324,12 @@ def plot_egress_time_dis(
         return fig
 
 
-def plot_egress_time_dis_all(save_subfolder: str = "", et_: pd.DataFrame = None, save_on: bool = True):
+def plot_egress_time_dis_all(
+        save_subfolder: str = "",
+        et_: pd.DataFrame = None,
+        physical_link_info: np.ndarray = None,
+        save_on: bool = True,
+):
     """
     Generates and saves egress time distribution plots for all platform links, including scatter plots,
     histograms, and boxplots. The plots visualize the relationship between egress times and alighting
@@ -319,34 +340,39 @@ def plot_egress_time_dis_all(save_subfolder: str = "", et_: pd.DataFrame = None,
     files to the specified directory.
 
     Parameters:
-        save_subfolder (str): The subfolder where plots will be saved. If not specified, plots are saved
-                               in the default figure folder.
-        et_ (pd.DataFrame): Optional DataFrame containing egress time data. If not provided, the function
-                            attempts to read the data from a file.
-        save_on (bool): If True, the plots are saved to files. If False, the plots are returned as figure
-                        objects for further use or analysis.
+    ------
+    :param save_subfolder: The subfolder where plots will be saved.
+        If not specified, plots are saved in the default figure folder.
 
-    Returns:
-        None
+    :param et_: Optional DataFrame containing egress time data.
+        If not provided, the function attempts to read the data from `egress_times_1.pkl`.
+
+    :param physical_link_info: Optional numpy array with `pl_id`, `platform_id`, `uid`.
+
+    :param save_on: If True, the plots are saved to files. If False, the plots are returned as figure
+        objects for further use or analysis.
+
     """
     et_ = et_ if et_ is not None else read_(fn="egress_times_1.pkl", show_timer=False)
-    et__ = et_.set_index(["node1", "node2"])
+    physical_link_info = physical_link_info if physical_link_info is not None else get_physical_links_info(et_=et_)
 
     saving_dir = config.CONFIG["figure_folder"] + "/" + save_subfolder
     if save_subfolder and not os.path.exists(saving_dir):
         os.makedirs(saving_dir)
 
-    for uid, platform_links in get_egress_link_groups(et_=et_).items():
-        for egress_links in platform_links:
-            # all egress links on the same platform
-            et = et__[et__.index.isin(egress_links)]
+    print(f"[INFO] Plotting ETD...")
+    for uid in range(1001, 1137):
+        _pl_info = physical_link_info[physical_link_info[:, 2] == uid]
+        for pl_id in np.unique(_pl_info[:, 0]):
+            plat_ids = _pl_info[_pl_info[:, 0] == pl_id][:, 1]
+            et = et_[et_["node1"].isin(plat_ids)]
             if et.shape[0] == 0:
                 continue
-            title = f"{uid}_{[i[0] for i in egress_links]}"
+            title = f"{uid}_{plat_ids}"
             raw_size = et.shape[0]
             lb, ub = get_reject_outlier_bd(data=et['egress_time'].values, method="zscore", abs_max=500)
             et = et[(et['egress_time'] >= lb) & (et['egress_time'] <= ub)]
-            print(f"{title} | Data size: {et.shape[0]}/{raw_size} | BD: [{lb:.4f}, {ub:.4f}]")
+            print(f"{title} | Data size: {et.shape[0]} / {raw_size} | BD: [{lb:.4f}, {ub:.4f}]")
 
             fig = plot_egress_time_dis(
                 egress_time=et['egress_time'].values, alight_ts=et['alight_ts'].values, title=title,
@@ -360,6 +386,20 @@ def plot_egress_time_dis_all(save_subfolder: str = "", et_: pd.DataFrame = None,
 
 
 def fit_pdf_cdf(data: np.ndarray, method: str = "kde") -> tuple[Callable, Callable]:
+    """
+    Fit a probability density function (PDF) and cumulative distribution function (CDF) to the input data.
+    Parameters:
+        data (np.ndarray): Input data array.
+        method (str): Method to fit the PDF and CDF. Options are 'kde' (Kernel Density Estimation),
+                      'gamma' (Gamma Distribution), and 'lognorm' (Log-Normal Distribution).
+    Returns:
+        tuple[Callable, Callable]: A tuple containing the fitted PDF function and CDF function.
+                                   The PDF function takes x values as input and returns the corresponding
+                                   PDF values. The CDF function takes x values as input and returns the
+                                   corresponding CDF values.
+    Raises:
+        Exception: If an invalid method is provided.
+    """
     if method == "kde":
         from scipy.stats import gaussian_kde
         kde = gaussian_kde(data)
@@ -378,8 +418,91 @@ def fit_pdf_cdf(data: np.ndarray, method: str = "kde") -> tuple[Callable, Callab
         raise Exception("Please use either kde, gamma, or lognorm method to fit pdf!")
 
 
-def fit_walk_time_distribution(data: np.ndarray, method: str = "kde", ):
-    ...
+def evaluate_fit(data: np.ndarray, cdf_func: Callable) -> tuple[float, float]:
+    """
+    Evaluate the fit of a cumulative distribution function (CDF) to the input data.
+    :param data: Input data array.
+    :param cdf_func: CDF function to evaluate.
+    :return: A tuple containing the K-S statistic and the p-value of the K-S test.
+    """
+    data_sorted = np.sort(data)
+    return kstest(data_sorted, cdf_func)
+
+
+def fit_one_pl(pl_id: int, et_: pd.DataFrame, physical_link_info: np.ndarray, x: np.ndarray) -> np.ndarray | None:
+    """
+    Fit the distribution of physical links egress time with the following columns:
+        [
+            pl_id, x,
+            kde_pdf, kde_cdf, kde_ks_stat, kde_ks_p_value,
+            gamma_pdf, gamma_cdf, gamma_ks_stat, gamma_ks_p_value,
+            lognorm_pdf, lognorm_cdf, lognorm_ks_stat, lognorm_ks_p_value
+        ]
+    :param pl_id: physical link id
+    :param et_: egress time dataframe
+    :param physical_link_info: physical link info array, each row is [pl_id, platform_id, uid]
+    :param x: x values for pdf and cdf, usually [0, 500] with 501 points
+
+    :return: array with shape (x.size, 14) or None
+    """
+    et = et_[et_["node1"].isin(physical_link_info[physical_link_info[:, 0] == pl_id][:, 1])]
+    if et.shape[0] == 0:
+        return None
+    data = et['egress_time'].values
+    data = reject_outliers(data, method="zscore", abs_max=500)
+    res_this_pl = [np.ones_like(x) * pl_id, x]
+
+    for met in ["kde", "gamma", "lognorm"]:
+        pdf_f, cdf_f = fit_pdf_cdf(data, method=met)
+        pdf_values = pdf_f(x)
+        cdf_values = cdf_f(x)
+        cdf_values = cdf_values / cdf_values[-1]  # normalize
+        ks_stat, ks_p_val = evaluate_fit(data=data, cdf_func=cdf_f)
+        res_this_pl.extend([pdf_values, cdf_values,
+                            np.ones_like(x) * ks_stat,
+                            np.ones_like(x) * ks_p_val])
+
+    return np.vstack(res_this_pl).T
+
+
+def fit_egress_time_dis_all_parallel(
+        et_: pd.DataFrame,
+        physical_link_info: np.ndarray = None,
+        n_jobs: int = -1
+) -> pd.DataFrame:
+    """
+    Fit the distribution of physical links egress time with the following columns:
+        [
+            pl_id, x,
+            kde_pdf, kde_cdf, kde_ks_stat, kde_ks_p_value,
+            gamma_pdf, gamma_cdf, gamma_ks_stat, gamma_ks_p_value,
+            lognorm_pdf, lognorm_cdf, lognorm_ks_stat, lognorm_ks_p_value
+        ]
+    :param et_: egress time dataframe
+    :param physical_link_info: physical link info array, each row is [pl_id, platform_id, uid]
+    :param n_jobs: number of jobs to run in parallel, default is -1 (use all available cores)
+
+    :return: dataframe with shape (n_pl * 501, 14)
+    """
+    print(f"[INFO] Start fitting egress time distribution using {n_jobs} threads...")
+
+    x = np.linspace(0, 500, 501)
+    physical_link_info = physical_link_info if physical_link_info is not None else get_physical_links_info(et_=et_)
+    pl_ids = np.unique(physical_link_info[:, 0])
+
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(fit_one_pl)(pl_id, et_, physical_link_info, x) for pl_id in
+        tqdm(pl_ids, desc="Physical links egress time distribution fitting")
+    )
+    results = [res for res in results if res is not None]
+    res = np.vstack(results)
+
+    return pd.DataFrame(res, columns=[
+        "pl_id", "x",
+        "kde_pdf", "kde_cdf", "kde_ks_stat", "kde_ks_p_value",
+        "gamma_pdf", "gamma_cdf", "gamma_ks_stat", "gamma_ks_p_value",
+        "lognorm_pdf", "lognorm_cdf", "lognorm_ks_stat", "lognorm_ks_p_value"
+    ])
 
 
 def get_pdf(walk_param: dict[str, float], walk_time: float | np.ndarray) -> float | np.ndarray:

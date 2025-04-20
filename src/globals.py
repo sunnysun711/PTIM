@@ -27,7 +27,10 @@ import numpy as np
 from src import config
 from src.utils import read_
 
-K_PV: np.ndarray = np.array([])
+K_PV: np.ndarray | None = None
+K_PV_DICT: dict[(int, int), np.ndarray] | None = None
+TT: np.ndarray | None = None
+AFC: np.ndarray | None = None
 
 
 def build_k_pv_dic() -> dict[(int, int), np.ndarray]:
@@ -41,8 +44,6 @@ def build_k_pv_dic() -> dict[(int, int), np.ndarray]:
     """
     # Read and preprocess path via data
     pv_df = read_(config.CONFIG["results"]["pathvia"], show_timer=False).sort_values(by=["path_id", "pv_id"])
-    global K_PV
-    K_PV = pv_df.values
     pv_df["nid1"] = pv_df["node_id1"] // 10
     pv_df["nid2"] = pv_df["node_id2"] // 10
 
@@ -88,9 +89,36 @@ def build_tt() -> np.ndarray[int]:
     return tt_df[["TRAIN_ID", "STATION_NID", "LINE_NID", "UPDOWN", "ts1", "DEPARTURE_TS"]].values
 
 
+def get_k_pv():
+    global K_PV
+    if K_PV is None:
+        K_PV = read_(config.CONFIG["results"]["pathvia"], show_timer=False).sort_values(by=["path_id", "pv_id"]).values
+    return K_PV
+
+
+def get_k_pv_dict():
+    global K_PV_DICT
+    if K_PV_DICT is None:
+        K_PV_DICT = build_k_pv_dic()
+    return K_PV_DICT
+
+
+def get_tt():
+    global TT
+    if TT is None:
+        TT = build_tt()
+    return TT
+
+
+def get_afc():
+    global AFC
+    if AFC is None:
+        AFC = read_("AFC", show_timer=False).drop(columns=["TRAVEL_TIME"]).reset_index().values
+    return AFC
+
 # ---------------------------
 # Public, frequently used variables (read-only across the project)
 # ---------------------------
-K_PV_DICT = build_k_pv_dic()
-TT = build_tt()
-AFC = read_("AFC", show_timer=False).drop(columns=["TRAVEL_TIME"]).reset_index().values
+# K_PV_DICT = build_k_pv_dic()
+# TT = build_tt()
+# AFC = read_("AFC", show_timer=False).drop(columns=["TRAVEL_TIME"]).reset_index().values

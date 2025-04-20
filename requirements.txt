@@ -5,3 +5,5 @@ matplotlib
 tqdm
 seaborn
 scipy
+pyyaml
+joblib

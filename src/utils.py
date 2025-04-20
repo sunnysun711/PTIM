@@ -335,7 +335,7 @@ def save_(fn: str, data: pd.DataFrame, auto_index_on: bool = False) -> None:
     data.info()
 
     saving_method(fp)
-    print(f"[INFO] File saved to: {fp}")
+    print(f"\033[1;91m[INFO] File saved to: {fp}\033[0m")  # bold red
     return
 
 

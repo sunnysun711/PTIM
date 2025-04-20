@@ -20,7 +20,10 @@ Data sources:
 """
 import numpy as np
 import pandas as pd
+from joblib import Parallel, delayed
 from tqdm import tqdm
+from tqdm.contrib.concurrent import process_map as pmap
+from functools import partial
 
 from src import config
 from src.utils import ts2tstr, save_
@@ -36,9 +39,10 @@ def find_trains(nid1: int, nid2: int, ts1: int, ts2: int, line: int, upd: int) -
     assert ts1 < ts2, f"ts1 should be smaller than ts2: {ts1}, {ts2}"
 
     # filter line
-    from src.globals import TT
-    start_idx, end_idx = np.searchsorted(TT[:, 2], [line, line + 1])
-    tt: np.ndarray[int] = TT[start_idx:end_idx]
+    from src.globals import get_tt
+    tt_ = get_tt()
+    start_idx, end_idx = np.searchsorted(tt_[:, 2], [line, line + 1])
+    tt: np.ndarray[int] = tt_[start_idx:end_idx]
 
     # filter updown
     start_idx, end_idx = np.searchsorted(tt[:, 3], [upd, upd + 1])
@@ -275,10 +279,13 @@ def find_feas_iti_all(save_feas_iti: bool = True, save_afc_no_iti: bool = True) 
     :return: pd.DataFrame containing feasible itineraries.
         columns: ['rid', 'iti_id', 'path_id','seg_id', 'train_id', 'board_ts', 'alight_ts']
     """
-    from src.globals import K_PV_DICT, AFC
+    from src.globals import get_k_pv_dict, get_afc
+    afc = get_afc()
+    k_pv_dic = get_k_pv_dict()
+
     data = []
-    for rid, uid1, ts1, uid2, ts2 in tqdm(AFC, total=AFC.shape[0], desc="Finding feasible itineraries"):
-        k_pv = K_PV_DICT[(uid1, uid2)]
+    for rid, uid1, ts1, uid2, ts2 in tqdm(afc, total=afc.shape[0], desc="Finding feasible itineraries"):
+        k_pv = k_pv_dic[(uid1, uid2)]
         iti_list = find_feas_iti(k_pv, ts1, ts2)
         for iti_id, itinerary in enumerate(iti_list, start=1):
             path_id = itinerary[0]
@@ -290,7 +297,7 @@ def find_feas_iti_all(save_feas_iti: bool = True, save_afc_no_iti: bool = True) 
         if not data:
             print("All passengers have feasible itineraries.")
             return None
-        rids_not_found = AFC[~np.isin(AFC[:, 0], [seg[0] for seg in data])]
+        rids_not_found = afc[~np.isin(afc[:, 0], [seg[0] for seg in data])]
         df_rids_not_found = pd.DataFrame(
             rids_not_found,
             columns=['rid', 'uid1', 'ts1', 'uid2', 'ts2']
@@ -310,6 +317,82 @@ def find_feas_iti_all(save_feas_iti: bool = True, save_afc_no_iti: bool = True) 
         data,
         columns=['rid', 'iti_id', 'path_id', 'seg_id', 'train_id', 'board_ts', 'alight_ts'])
     df = df.astype({
+        'rid': 'int32',
+        'iti_id': 'int32',
+        'path_id': 'int32',
+        'seg_id': 'int8',
+        'train_id': 'category',
+        'board_ts': 'int32',
+        'alight_ts': 'int32'
+    })
+
+    if save_feas_iti:
+        save_(fn=config.CONFIG["results"]["feas_iti"], data=df, auto_index_on=False)
+
+    return df
+
+
+def process_afc_chunk(chunk: np.ndarray, k_pv_dict: dict) -> list[list]:
+    results = []
+    for rid, uid1, ts1, uid2, ts2 in chunk:
+        k_pv = k_pv_dict[(uid1, uid2)]
+        iti_list = find_feas_iti(k_pv, ts1, ts2)
+        for iti_id, itinerary in enumerate(iti_list, start=1):
+            path_id = itinerary[0]
+            for seg_id, (train_id, board_ts, alight_ts) in enumerate(itinerary[1:], start=1):
+                results.append([rid, iti_id, path_id, seg_id, train_id, board_ts, alight_ts])
+    return results
+
+
+def find_feas_iti_all_parallel(save_feas_iti: bool = True, save_afc_no_iti: bool = True,
+                               n_jobs: int = -1, chunk_size: int = 100000) -> pd.DataFrame:
+    """
+    TODO: This function is not tested yet. Please use find_feas_iti_all instead. (2025-04-21) Can't display progress bar.
+    Parallel version: Find feasible itineraries for all passengers and save results.
+
+    :param save_feas_iti: If True, save feasible itineraries to file.
+    :param save_afc_no_iti: If True, save records of passengers without feasible itineraries.
+    :param n_jobs: Number of parallel jobs. If -1, use all available CPU cores. Default is -1.
+    :param chunk_size: Number of rids to process in each chunk. Default is 100,000.
+
+    :return: pd.DataFrame with ['rid', 'iti_id', 'path_id','seg_id', 'train_id', 'board_ts', 'alight_ts']
+    """
+    from src.globals import get_afc, build_k_pv_dic
+    afc = get_afc()
+    k_pv_dict = build_k_pv_dic()
+
+    chunks = [afc[i:i + chunk_size] for i in range(0, len(afc), chunk_size)]
+
+    print(f"[INFO] Start finding feasible itineraries using {n_jobs} threads with chunk size {chunk_size}...")
+
+    partial_process_afc_chunk = partial(process_afc_chunk, k_pv_dict=k_pv_dict)
+    results = Parallel(n_jobs=n_jobs, prefer="threads")(
+        delayed(partial_process_afc_chunk)(chunk) for chunk in chunks
+    )
+    data = [row for group in results for row in group]
+
+    def _save_rids_not_found() -> pd.DataFrame | None:
+        if not data:
+            print("All passengers have no feasible itineraries.")
+            return pd.DataFrame(afc, columns=['rid', 'uid1', 'ts1', 'uid2', 'ts2'])
+        found_rids = np.array([row[0] for row in data])
+        not_found_mask = ~np.isin(afc[:, 0], found_rids)
+        rids_not_found = afc[not_found_mask]
+        if rids_not_found.shape[0] > 0:
+            print(f"[INFO] Not found feasible itinerary for {rids_not_found.shape[0]} passengers.")
+            return pd.DataFrame(rids_not_found, columns=['rid', 'uid1', 'ts1', 'uid2', 'ts2'])
+        return None
+
+    if save_afc_no_iti:
+        df_nf = _save_rids_not_found()
+        if df_nf is not None:
+            save_(fn=config.CONFIG["results"]["AFC_no_iti"], data=df_nf, auto_index_on=False)
+
+    # Convert to final dataframe
+    df = pd.DataFrame(
+        data,
+        columns=['rid', 'iti_id', 'path_id', 'seg_id', 'train_id', 'board_ts', 'alight_ts']
+    ).astype({
         'rid': 'int32',
         'iti_id': 'int32',
         'path_id': 'int32',
