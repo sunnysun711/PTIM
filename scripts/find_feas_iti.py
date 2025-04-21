@@ -65,19 +65,13 @@ def main():
           "       2. AFC_no_iti.pkl: structure same as AFC. \n"
           "======================================================================================"
           "\033[0m")
-    df = find_feas_iti_all(save_feas_iti=False, save_afc_no_iti=False)  # 673s [10:14<00:00, 3273.91it/s] (2025-04-21)
-    # df = find_feas_iti_all_parallel(
-    #     save_feas_iti=False, save_afc_no_iti=False, n_jobs=-1, chunk_size=100000
-    # )  # 86s 21/21 [01:25<00:00,  4.08s/it] (2025-04-21)
+    df = find_feas_iti_all(save_feas_iti=False, save_afc_no_iti=False)  # 546s [08:27<00:00, 3964.37it/s] (2025-04-21)
+    # df = find_feas_iti_all_parallel(save_feas_iti=False, save_afc_no_iti=False, n_jobs=-1, chunk_size=5000)
     print(df.shape)
     return
 
 
 if __name__ == '__main__':
     config.load_config()
-    print(config.CONFIG)
-    a = time.time()
-    main()
-    print(f"Time: {time.time() - a}")
-    # _plot_check_feas_iti()
+    # main()
     pass

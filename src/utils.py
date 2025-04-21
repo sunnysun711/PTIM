@@ -11,11 +11,13 @@ Key Functions:
 Dependencies:
 - pandas, os, json, time
 """
+import contextlib
 import functools
 import json
 import os
 import time
 
+import joblib
 import pandas as pd
 
 from src import config
@@ -43,9 +45,34 @@ def execution_timer(func):
     return wrapper
 
 
+@contextlib.contextmanager
+def tqdm_joblib(tqdm_object):
+    """
+    Refer to: https://stackoverflow.com/questions/24983493/tracking-progress-of-joblib-parallel-execution
+    Context manager to patch joblib to report into tqdm progress bar given as argument
+    """
+
+    class TqdmBatchCompletionCallback(joblib.parallel.BatchCompletionCallBack):
+        def __call__(self, *args, **kwargs):
+            tqdm_object.update(n=self.batch_size)
+            return super().__call__(*args, **kwargs)
+
+    old_batch_callback = joblib.parallel.BatchCompletionCallBack
+    joblib.parallel.BatchCompletionCallBack = TqdmBatchCompletionCallback
+    try:
+        yield tqdm_object
+    finally:
+        joblib.parallel.BatchCompletionCallBack = old_batch_callback
+        tqdm_object.close()
+
+
 @execution_timer  # ~ 0.1433 seconds for AFC
 def read_data(fn: str = "AFC", show_timer: bool = False, drop_cols: bool = True) -> pd.DataFrame | dict | list:
-    """Read data file and drop specific columns based on file name."""
+    """
+    LEGACY METHOD: Please use read_() instead.
+
+    Read data file and drop specific columns based on file name.
+    """
     if fn.endswith(".csv"):
         df = pd.read_csv(f"{config.CONFIG['data_folder']}//{fn}")
     elif fn.endswith(".parquet"):

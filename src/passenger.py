@@ -18,6 +18,8 @@ Data sources:
 - path.pkl
 - pathvia.pkl
 """
+from multiprocessing import cpu_count
+
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
@@ -26,7 +28,7 @@ from tqdm.contrib.concurrent import process_map as pmap
 from functools import partial
 
 from src import config
-from src.utils import ts2tstr, save_
+from src.utils import ts2tstr, save_, tqdm_joblib
 
 
 def find_trains(nid1: int, nid2: int, ts1: int, ts2: int, line: int, upd: int) -> list[tuple[int, int, int]]:
@@ -270,7 +272,7 @@ def find_feas_iti_all(save_feas_iti: bool = True, save_afc_no_iti: bool = True) 
     """
     Main function to find feasible itineraries for all passengers and save results.
     This function will generate two dataframes:
-        1. AFC_feas_iti_not_found.pkl: records of passengers without feasible itineraries.
+        1. AFC_no_iti.pkl: records of passengers without feasible itineraries.
             (Could be empty, if empty, not saved.)
         2. feas_iti.pkl: feasible itineraries for all passengers. (with the returned df structure)
 
@@ -345,30 +347,37 @@ def process_afc_chunk(chunk: np.ndarray, k_pv_dict: dict) -> list[list]:
 
 
 def find_feas_iti_all_parallel(save_feas_iti: bool = True, save_afc_no_iti: bool = True,
-                               n_jobs: int = -1, chunk_size: int = 100000) -> pd.DataFrame:
+                               n_jobs: int = -1, chunk_size: int = 63000) -> pd.DataFrame:
     """
-    TODO: This function is not tested yet. Please use find_feas_iti_all instead. (2025-04-21) Can't display progress bar.
+    NOT USED: This function is not as efficient as the linear version.
     Parallel version: Find feasible itineraries for all passengers and save results.
 
     :param save_feas_iti: If True, save feasible itineraries to file.
     :param save_afc_no_iti: If True, save records of passengers without feasible itineraries.
     :param n_jobs: Number of parallel jobs. If -1, use all available CPU cores. Default is -1.
-    :param chunk_size: Number of rids to process in each chunk. Default is 100,000.
+    :param chunk_size: Number of rids to process in each chunk. Default is 63,000.
 
     :return: pd.DataFrame with ['rid', 'iti_id', 'path_id','seg_id', 'train_id', 'board_ts', 'alight_ts']
     """
     from src.globals import get_afc, build_k_pv_dic
     afc = get_afc()
     k_pv_dict = build_k_pv_dic()
+    n_jobs = cpu_count() if n_jobs == -1 else n_jobs
 
     chunks = [afc[i:i + chunk_size] for i in range(0, len(afc), chunk_size)]
 
     print(f"[INFO] Start finding feasible itineraries using {n_jobs} threads with chunk size {chunk_size}...")
 
-    partial_process_afc_chunk = partial(process_afc_chunk, k_pv_dict=k_pv_dict)
-    results = Parallel(n_jobs=n_jobs, prefer="threads")(
-        delayed(partial_process_afc_chunk)(chunk) for chunk in chunks
-    )
+    # partial_process_afc_chunk = partial(process_afc_chunk, k_pv_dict=k_pv_dict)
+    # results = Parallel(n_jobs=n_jobs, prefer="threads")(
+    #     delayed(partial_process_afc_chunk)(chunk) for chunk in chunks
+    # )
+
+    with tqdm_joblib(
+            tqdm(desc="Finding feasible itineraries with chunks", total=len(chunks), unit="chunk")) as progress_bar:
+        results = Parallel(n_jobs=n_jobs, prefer="threads")(
+            delayed(process_afc_chunk)(chunk, k_pv_dict) for chunk in chunks
+        )
     data = [row for group in results for row in group]
 
     def _save_rids_not_found() -> pd.DataFrame | None:
