@@ -132,8 +132,4 @@ if __name__ == '__main__':
     config.load_config()
     # main()
     # _check_egress_time_outlier_rejects(uid=None)
-    et_ = read_(fn="egress_times_1", show_timer=False, latest_=False)
-    etd = save_etd(et_=et_, save_on=False)
-    etd.info()
-    print(etd)
     pass

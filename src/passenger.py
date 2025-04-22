@@ -28,6 +28,7 @@ from tqdm.contrib.concurrent import process_map as pmap
 from functools import partial
 
 from src import config
+from src.globals import get_tt, get_afc, get_k_pv_dict, build_k_pv_dic
 from src.utils import ts2tstr, save_, tqdm_joblib
 
 
@@ -41,7 +42,6 @@ def find_trains(nid1: int, nid2: int, ts1: int, ts2: int, line: int, upd: int) -
     assert ts1 < ts2, f"ts1 should be smaller than ts2: {ts1}, {ts2}"
 
     # filter line
-    from src.globals import get_tt
     tt_ = get_tt()
     start_idx, end_idx = np.searchsorted(tt_[:, 2], [line, line + 1])
     tt: np.ndarray[int] = tt_[start_idx:end_idx]
@@ -281,7 +281,6 @@ def find_feas_iti_all(save_feas_iti: bool = True, save_afc_no_iti: bool = True) 
     :return: pd.DataFrame containing feasible itineraries.
         columns: ['rid', 'iti_id', 'path_id','seg_id', 'train_id', 'board_ts', 'alight_ts']
     """
-    from src.globals import get_k_pv_dict, get_afc
     afc = get_afc()
     k_pv_dic = get_k_pv_dict()
 
@@ -359,7 +358,6 @@ def find_feas_iti_all_parallel(save_feas_iti: bool = True, save_afc_no_iti: bool
 
     :return: pd.DataFrame with ['rid', 'iti_id', 'path_id','seg_id', 'train_id', 'board_ts', 'alight_ts']
     """
-    from src.globals import get_afc, build_k_pv_dic
     afc = get_afc()
     k_pv_dict = build_k_pv_dic()
     n_jobs = cpu_count() if n_jobs == -1 else n_jobs

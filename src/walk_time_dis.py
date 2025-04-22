@@ -32,6 +32,7 @@ import seaborn as sns
 
 from src import config
 from src.utils import read_, read_all, ts2tstr
+from src.globals import get_afc, get_k_pv
 
 
 def get_egress_time_from_left() -> pd.DataFrame:
@@ -104,7 +105,6 @@ def calculate_egress_time(df_last_seg: pd.DataFrame) -> pd.DataFrame:
         AssertionError: If the last segment found does not match the last segment in the path,
                         indicating a potential data inconsistency.
     """
-    from src.globals import get_afc, get_k_pv
     afc = get_afc()
     k_pv = get_k_pv()
 
