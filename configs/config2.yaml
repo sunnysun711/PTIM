@@ -49,4 +49,20 @@ parameters:
   strategy: "random"  # "random" or "greedy"
   step_size: 100
 
+  # parameters for train types
+  A_LINES:
+    - 7
+    - 10
+  B_LINES:
+    - 1
+    - 2
+    - 3
+    - 4
+  TRAIN_B_SEAT: 240
+  TRAIN_B_AREA: 197.5
+  TRAIN_A_SEAT: 240
+  TRAIN_A_AREA: 265
+  STD_DENSITY: 6.57
+  STD_DENSITY_COMMUTER: 8.45
+
 

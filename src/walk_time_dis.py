@@ -16,6 +16,11 @@ Import and call the following functions as needed:
 - `get_pdf()`: Calculate PDF from walking time samples.
 - `get_cdf()`: Calculate CDF from walking time samples.
 """
+from src.globals import get_afc, get_k_pv, get_pl_info, get_etd
+from src.utils import read_, read_all, ts2tstr
+from src import config
+import seaborn as sns
+from matplotlib import pyplot as plt
 import os
 from typing import Callable, Iterable
 
@@ -27,12 +32,6 @@ from scipy.stats import kstest
 from tqdm import tqdm
 
 matplotlib.use('TkAgg')
-from matplotlib import pyplot as plt
-import seaborn as sns
-
-from src import config
-from src.utils import read_, read_all, ts2tstr
-from src.globals import get_afc, get_k_pv, get_pl_info, get_etd
 
 
 def get_egress_time_from_left() -> pd.DataFrame:
@@ -109,7 +108,8 @@ def calculate_egress_time(df_last_seg: pd.DataFrame) -> pd.DataFrame:
     k_pv = get_k_pv()
 
     filtered_AFC = afc[np.isin(afc[:, 0], df_last_seg.index)]
-    egress_link = k_pv[len(k_pv) - 1 - np.unique(k_pv[:, 0][::-1], return_index=True)[1], :4]
+    egress_link = k_pv[len(k_pv) - 1 - np.unique(k_pv[:, 0]
+                                                 [::-1], return_index=True)[1], :4]
     path_id_node1 = {link[0]: link[2] for link in egress_link}
     path_id_node2 = {link[0]: link[3] for link in egress_link}
     df_last_seg['ts2'] = {record[0]: record[-1] for record in filtered_AFC}
@@ -150,8 +150,10 @@ def get_physical_links_info(et_: pd.DataFrame, platform: dict = None, ) -> np.nd
         - 'platform_id': The platform node_id of the egress link.
         - 'uid': The station UID of the egress link.
     """
-    platform = platform if platform is not None else read_(fn="platform.json", show_timer=False)
-    et_ = et_ if et_ is not None else read_(fn="egress_times_1.pkl", show_timer=False)
+    platform = platform if platform is not None else read_(
+        fn="platform.json", show_timer=False)
+    et_ = et_ if et_ is not None else read_(
+        fn="egress_times_1.pkl", show_timer=False)
 
     pl_id = 1
     data = []  # [pl_id, platform_id, uid]
@@ -164,7 +166,8 @@ def get_physical_links_info(et_: pd.DataFrame, platform: dict = None, ) -> np.nd
         if uid in platform:
             platform_groups = platform[uid]
             for platform_group in platform_groups:
-                platform_group = [p_id for p_id in platform_group if p_id in found_platforms]
+                platform_group = [
+                    p_id for p_id in platform_group if p_id in found_platforms]
                 if len(platform_group) == 0:
                     continue
                 for platform_id in platform_group:
@@ -208,9 +211,11 @@ def get_reject_outlier_bd(data: np.ndarray, method: str = "zscore", abs_max: int
         upper_whisker = Q3 + (Q3 - miu)  # upper limit
         lower_bound, upper_bound = lower_whisker, upper_whisker
     elif method == "zscore":
-        lower_bound, upper_bound = np.mean(data) - 3 * np.std(data), np.mean(data) + 3 * np.std(data)
+        lower_bound, upper_bound = np.mean(
+            data) - 3 * np.std(data), np.mean(data) + 3 * np.std(data)
     else:
-        raise Exception("Please use either boxplot or zscore method to reject outliers!")
+        raise Exception(
+            "Please use either boxplot or zscore method to reject outliers!")
 
     # manual bound
     if abs_max:
@@ -275,13 +280,16 @@ def plot_egress_time_dis(
         y=egress_time, kde=False, ax=ax_right, color="blue", alpha=0.3, bins=n_bins, stat='count', element="bars")
     x_values = np.linspace(0, 500, 501)
     kde_pdf, _ = fit_pdf_cdf(egress_time, method="kde")
-    ax_right.plot(kde_pdf(x_values) * scale, x_values, color="red", label="KDE Fit", lw=1)
+    ax_right.plot(kde_pdf(x_values) * scale, x_values,
+                  color="red", label="KDE Fit", lw=1)
 
     # to show all fits
     gamma_pdf, _ = fit_pdf_cdf(egress_time, method="gamma")
     lognorm_pdf, _ = fit_pdf_cdf(egress_time, method="lognorm")
-    ax_right.plot(gamma_pdf(x_values) * scale, x_values, color="green", label="Gamma Fit", lw=1)
-    ax_right.plot(lognorm_pdf(x_values) * scale, x_values, color="orange", label="LogNormal Fit", lw=1)
+    ax_right.plot(gamma_pdf(x_values) * scale, x_values,
+                  color="green", label="Gamma Fit", lw=1)
+    ax_right.plot(lognorm_pdf(x_values) * scale, x_values,
+                  color="orange", label="LogNormal Fit", lw=1)
 
     ax_right.set_xlabel("Frequency")
     ax_right.set_ylabel("")
@@ -309,8 +317,10 @@ def plot_egress_time_dis(
     ax_bottom.set_xlabel(f"Alight Timestamp")
     ax_bottom.set_ylabel("Egress Time")
     # Set x-axis ticks to show 30-minute intervals
-    ax_bottom.set_xticks([i - 0.5 for i in range((24 - 6) * 3600 // _bin_width + 1)])
-    ax_bottom.set_xticklabels([ts2tstr(ts) for ts in range(6 * 3600, 24 * 3600 + 1, _bin_width)])
+    ax_bottom.set_xticks(
+        [i - 0.5 for i in range((24 - 6) * 3600 // _bin_width + 1)])
+    ax_bottom.set_xticklabels(
+        [ts2tstr(ts) for ts in range(6 * 3600, 24 * 3600 + 1, _bin_width)])
     ax_bottom.set_xlim(- 0.5, (24 - 6) * 3600 // _bin_width - 0.5)
     # Rotate x-axis labels for better readability
     for label in ax_bottom.get_xticklabels():
@@ -353,8 +363,10 @@ def plot_egress_time_dis_all(
         objects for further use or analysis.
 
     """
-    et_ = et_ if et_ is not None else read_(fn="egress_times_1.pkl", show_timer=False)
-    physical_link_info = physical_link_info if physical_link_info is not None else get_physical_links_info(et_=et_)
+    et_ = et_ if et_ is not None else read_(
+        fn="egress_times_1.pkl", show_timer=False)
+    physical_link_info = physical_link_info if physical_link_info is not None else get_physical_links_info(
+        et_=et_)
 
     saving_dir = config.CONFIG["figure_folder"] + "/" + save_subfolder
     if save_subfolder and not os.path.exists(saving_dir):
@@ -370,9 +382,11 @@ def plot_egress_time_dis_all(
                 continue
             title = f"{uid}_{plat_ids}"
             raw_size = et.shape[0]
-            lb, ub = get_reject_outlier_bd(data=et['egress_time'].values, method="zscore", abs_max=500)
+            lb, ub = get_reject_outlier_bd(
+                data=et['egress_time'].values, method="zscore", abs_max=500)
             et = et[(et['egress_time'] >= lb) & (et['egress_time'] <= ub)]
-            print(f"{title} | Data size: {et.shape[0]} / {raw_size} | BD: [{lb:.4f}, {ub:.4f}]")
+            print(
+                f"{title} | Data size: {et.shape[0]} / {raw_size} | BD: [{lb:.4f}, {ub:.4f}]")
 
             fig = plot_egress_time_dis(
                 egress_time=et['egress_time'].values, alight_ts=et['alight_ts'].values, title=title,
@@ -415,7 +429,8 @@ def fit_pdf_cdf(data: np.ndarray, method: str = "kde") -> tuple[Callable, Callab
         # print(params)
         return lambda x: lognorm(*params).pdf(x), lambda x: lognorm(*params).cdf(x)
     else:
-        raise Exception("Please use either kde, gamma, or lognorm method to fit pdf!")
+        raise Exception(
+            "Please use either kde, gamma, or lognorm method to fit pdf!")
 
 
 def evaluate_fit(data: np.ndarray, cdf_func: Callable) -> tuple[float, float]:
@@ -445,7 +460,8 @@ def fit_one_pl(pl_id: int, et_: pd.DataFrame, physical_link_info: np.ndarray, x:
 
     :return: array with shape (x.size, 14) or None
     """
-    et = et_[et_["node1"].isin(physical_link_info[physical_link_info[:, 0] == pl_id][:, 1])]
+    et = et_[et_["node1"].isin(
+        physical_link_info[physical_link_info[:, 0] == pl_id][:, 1])]
     if et.shape[0] == 0:
         return None
     data = et['egress_time'].values
@@ -484,10 +500,12 @@ def fit_egress_time_dis_all_parallel(
 
     :return: dataframe with shape (n_pl * 501, 14)
     """
-    print(f"[INFO] Start fitting egress time distribution using {n_jobs} threads...")
+    print(
+        f"[INFO] Start fitting egress time distribution using {n_jobs} threads...")
 
     x = np.linspace(0, 500, 501)
-    physical_link_info = physical_link_info if physical_link_info is not None else get_physical_links_info(et_=et_)
+    physical_link_info = physical_link_info if physical_link_info is not None else get_physical_links_info(
+        et_=et_)
     pl_ids = np.unique(physical_link_info[:, 0])
 
     results = Parallel(n_jobs=n_jobs)(
@@ -514,11 +532,12 @@ def node_id_to_pl_id(node_id: int) -> int:
     pl_info = get_pl_info()
     pl_row = pl_info[pl_info[:, 1] == node_id]
     if pl_row.shape[0] == 0:
-        raise ValueError(f"Node id {node_id} not found in physical links info!")
+        raise ValueError(
+            f"Node id {node_id} not found in physical links info!")
     return pl_row[0, 0]
 
 
-def get_pdf(pl_id: int, walk_time: int | Iterable[int], ) -> float | np.ndarray:
+def get_pdf(pl_id: int, walk_time: int | Iterable[int]) -> float | np.ndarray:
     """
     Compute the probability density function (PDF) of walking time.
 
@@ -538,15 +557,24 @@ def get_pdf(pl_id: int, walk_time: int | Iterable[int], ) -> float | np.ndarray:
     -----
     This function is vectorized for performance and can operate efficiently over entire columns.
     """
-    df_etd = get_etd()
-    df_etd = df_etd[df_etd["pl_id"] == pl_id].set_index("x")
-    pdf_col_name = config.CONFIG["parameters"]["distribution_type"] + "_pdf"
-    walk_time = np.array(walk_time)  # Ensure walk_time is always treated as an array
-    walk_time = np.array([walk_time]) if walk_time.ndim == 0 else walk_time  # Handle scalar input
+    etd = get_etd()
+    etd = etd[etd[:, 0] == pl_id][:, [1, 2]]  # Keep only x and pdf columns
+    x2pdf = dict(zip(etd[:, 0], etd[:, 1]))  # Create a dictionary mapping x to pdf
 
-    pdf_values = df_etd.loc[walk_time, pdf_col_name].values
+    # Ensure walk_time is always treated as an array
+    walk_time = np.atleast_1d(walk_time)
 
-    return pdf_values if len(pdf_values) > 1 else pdf_values[0]
+    # Use numpy's vectorized operations for efficiency
+    """
+    小规模数据（< 1,000）：列表推导式更快。
+    中等规模数据（1,000 ~ 50,000）：np.fromiter 或 np.vectorize 更合适。
+    大规模数据（> 100,000）：推荐使用 np.fromiter 或其他矢量化方法。
+    """
+    # pdf_values = np.vectorize(x2pdf.get, otypes=[float])(walk_time, 0)
+    pdf_values = np.fromiter((x2pdf[wt] for wt in walk_time), dtype=float)
+    # pdf_values = np.array([x2pdf[wt] for wt in walk_time])
+
+    return pdf_values if pdf_values.size > 1 else pdf_values[0]
 
 
 def get_cdf(pl_id: int, t_start: int | Iterable[int], t_end: int | Iterable[int]) -> float | np.ndarray:
@@ -574,18 +602,17 @@ def get_cdf(pl_id: int, t_start: int | Iterable[int], t_end: int | Iterable[int]
     Computes P(walk_time ∈ [t_start, t_end]).
     Efficiently supports vectorized input for use with entire Series/arrays.
     """
-    df_etd = get_etd()
-    df_etd = df_etd[df_etd["pl_id"] == pl_id].set_index("x")
-    cdf_col_name = config.CONFIG["parameters"]["distribution_type"] + "_cdf"
-
-    t_start, t_end = np.array(t_start), np.array(t_end)
-    t_start = np.array([t_start]) if t_start.ndim == 0 else t_start
-    t_end = np.array([t_end]) if t_end.ndim == 0 else t_end
+    etd = get_etd()
+    etd = etd[etd[:, 0] == pl_id][:, [1, 3]]  # Keep only x and cdf columns
+    x2cdf = dict(zip(etd[:, 0], etd[:, 1]))  # Create a dictionary mapping x to cdf
+    
+    t_start, t_end = np.atleast_1d(t_start), np.atleast_1d(t_end)
     if t_start.shape != t_end.shape:
         raise ValueError("t_start and t_end must have the same shape.")
 
-    cdf_start = df_etd.loc[t_start, cdf_col_name].values
-    cdf_end = df_etd.loc[t_end, cdf_col_name].values
+    cdf_start = np.fromiter((x2cdf[ts] for ts in t_start), dtype=float)
+    cdf_end = np.fromiter((x2cdf[te] for te in t_end), dtype=float)
+    # cdf_start = np.array([x2cdf[ts] for ts in t_start])
+    # cdf_end = np.array([x2cdf[te] for te in t_end])
+    
     return cdf_end - cdf_start if len(cdf_start) > 1 else cdf_end[0] - cdf_start[0]
-
-

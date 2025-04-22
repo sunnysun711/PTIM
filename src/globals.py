@@ -1,25 +1,28 @@
 """
-This module initializes and stores large, frequently used variables
-such as the train timetable (TT) and the k-shortest path via dictionary (K_PV_DICT).
-These are intended to be imported and read-only across the project.
+This module provides global variables and utility functions for accessing
+preprocessed data used throughout the project. These variables are initialized
+on-demand and cached for efficient reuse.
 
 Key Variables:
-1. K_PV_DICT: Mapping from OD station UIDs to k-shortest path segments
-2. TT: Preprocessed train timetable matrix
-3. AFC: Passenger records with origin-destination-time info
-4. K_PV: array of k-shortest paths, full details (including walk links)
+1. K_PV_DICT: Dictionary mapping station OD pairs to k-shortest path segments.
+2. TT: Train timetable matrix with departure and arrival times.
+3. AFC: Passenger records with origin-destination and timestamp information.
+4. PL_INFO: Physical link information mapping platforms to station UIDs.
+5. ETD: Egress time distribution data for physical links.
 
 Usage:
 - Import the module: `import src.globals as gl`
-- Access variables: `gl.TT`, `gl.K_PV_DICT`, `gl.AFC`, `gl.K_PV`
+- Access variables: `gl.get_tt()`, `gl.get_k_pv_dict()`, etc.
 
-Data sources:
+Data Sources:
 - pathvia.pkl
 - TT.pkl
 - AFC.pkl
+- physical_links.csv
+- etd.pkl
 
 Dependencies:
-- src.utils: For data reading
+- src.utils: For data reading and preprocessing.
 """
 
 import numpy as np
@@ -46,7 +49,8 @@ def build_k_pv_dic() -> dict[(int, int), np.ndarray]:
              ["path_id", "nid1", "nid2", "line", "updown"].
     """
     # Read and preprocess path via data
-    pv_df = read_(config.CONFIG["results"]["pathvia"], show_timer=False).sort_values(by=["path_id", "pv_id"])
+    pv_df = read_(config.CONFIG["results"]["pathvia"], show_timer=False).sort_values(
+        by=["path_id", "pv_id"])
     pv_df["nid1"] = pv_df["node_id1"] // 10
     pv_df["nid2"] = pv_df["node_id2"] // 10
 
@@ -67,7 +71,8 @@ def build_k_pv_dic() -> dict[(int, int), np.ndarray]:
             Array of pathvia rows corresponding to this OD pair
         """
         base_path_id = uid1 * 1000000 + uid2 * 100 + 1
-        start_idx, end_idx = np.searchsorted(pv_array[:, 0], [base_path_id, base_path_id + 100])
+        start_idx, end_idx = np.searchsorted(
+            pv_array[:, 0], [base_path_id, base_path_id + 100])
         return pv_array[start_idx:end_idx]
 
     return {
@@ -87,7 +92,8 @@ def build_tt() -> np.ndarray[int]:
         where `ts1` is the time when the doors open.
     """
     tt_df = read_("TT", show_timer=False).reset_index()
-    tt_df = tt_df.sort_values(["LINE_NID", "UPDOWN", "TRAIN_ID", "DEPARTURE_TS"])
+    tt_df = tt_df.sort_values(
+        ["LINE_NID", "UPDOWN", "TRAIN_ID", "DEPARTURE_TS"])
     tt_df["ts1"] = tt_df["DEPARTURE_TS"] - tt_df["STOP_TIME"]
     return tt_df[["TRAIN_ID", "STATION_NID", "LINE_NID", "UPDOWN", "ts1", "DEPARTURE_TS"]].values
 
@@ -102,7 +108,8 @@ def get_k_pv() -> np.ndarray:
     """
     global K_PV
     if K_PV is None:
-        K_PV = read_(config.CONFIG["results"]["pathvia"], show_timer=False).sort_values(by=["path_id", "pv_id"]).values
+        K_PV = read_(config.CONFIG["results"]["pathvia"], show_timer=False).sort_values(
+            by=["path_id", "pv_id"]).values
     return K_PV
 
 
@@ -147,7 +154,8 @@ def get_afc() -> np.ndarray:
     """
     global AFC
     if AFC is None:
-        AFC = read_("AFC", show_timer=False).drop(columns=["TRAVEL_TIME"]).reset_index().values
+        AFC = read_("AFC", show_timer=False).drop(
+            columns=["TRAVEL_TIME"]).reset_index().values
     return AFC
 
 
@@ -161,25 +169,34 @@ def get_pl_info() -> np.ndarray:
     """
     global PL_INFO
     if PL_INFO is None:
-        PL_INFO = read_(config.CONFIG["results"]["physical_links"], show_timer=False, latest_=True).values
+        PL_INFO = read_(
+            config.CONFIG["results"]["physical_links"], show_timer=False, latest_=True).values
     return PL_INFO
 
 
-def get_etd() -> pd.DataFrame:
+def get_etd() -> np.ndarray:
     """
     Get global variable ETD.
     If ETD is not initialized, read from the latest version of etd.pkl and store in ETD.
-    :return: DataFrame of shape (n, 13) with columns:
-        ['pl_id', 'x', 'kde_pdf', 'kde_cdf', 'kde_ks_stat', 'kde_ks_p_value',
-       'gamma_pdf', 'gamma_cdf', 'gamma_ks_stat', 'gamma_ks_p_value',
-       'lognorm_pdf', 'lognorm_cdf', 'lognorm_ks_stat', 'lognorm_ks_p_value'].
-        where `pl_id` is the physical link ID, `x` is egress time index (0-500),
-        and other columns are the ETD distribution parameters.
+    :return: Array of shape (n, 4) with columns:
+        ['pl_id', 'x', 'pdf', 'cdf']
+        where `pl_id` is the physical link ID, `x` is egress time index (0-500).
     """
     global ETD
     if ETD is None:
-        ETD = read_(config.CONFIG["results"]["etd"], show_timer=False, latest_=True)
-    return ETD
+        ETD = read_(config.CONFIG["results"]["etd"],
+                    show_timer=False, latest_=True)
+        ETD = ETD[[
+            "pl_id", "x", f"config.CONFIG['parameters']['distribution_type']_pdf",
+            f"config.CONFIG['parameters']['distribution_type']_cdf",
+            # f"config.CONFIG['parameters']['distribution_type']_ks_stat",
+            # f"config.CONFIG['parameters']['distribution_type']_ks_p_value"
+        ]]
+        ETD.columns = [
+            "pl_id", "x", "pdf", "cdf", 
+            # "ks_stat", "ks_p_value"
+        ]
+    return ETD.values
 
 # ---------------------------
 # Public, frequently used variables (read-only across the project)
