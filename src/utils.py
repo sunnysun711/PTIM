@@ -167,7 +167,7 @@ def get_file_path(fn: str, latest_: bool = False) -> str:
     fn, index, ext = split_fn_index_ext(fn)
     folder, subfolder = get_folder_and_subfolder(fn, ext)
     if latest_:
-        index = f"_{get_latest_file_index(fn)}"
+        index = f"_{get_latest_file_index(fn+ext, folder=folder, subfolder=subfolder, get_next=False)}"
 
     return os.path.join(folder, subfolder, fn + index + ext)
 
@@ -211,7 +211,7 @@ def determine_results_subfolder(fn: str) -> str:
         raise ValueError(f"Unknown file to determine results subfolder: {fn}")
 
 
-def get_latest_file_index(fn: str, get_next: bool = False) -> int:
+def get_latest_file_index(fn: str, folder: str = "", subfolder: str = "", get_next: bool = False) -> int:
     """
     Get the latest file index for versioned files.
 
@@ -219,20 +219,26 @@ def get_latest_file_index(fn: str, get_next: bool = False) -> int:
     -----------
     fn : str
         The base file name (without extension).
+    folder : str, optional
+        The folder path.
+    subfolder : str, optional
+        The subfolder path.
+    get_next : bool, optional
+        If True, return the next available index. If False, return the latest index.
 
     Returns:
     --------
     int
         The index of the latest file.
     """
-    base_fp = get_file_path(fn, latest_=False).rsplit(".", 1)[0]
+    base_fn, index, ext = split_fn_index_ext(fn)
     for i in range(1, 10001):
-        if not os.path.exists(f"{base_fp}_{i}.pkl"):
+        if not os.path.exists(os.path.join(folder, subfolder, f"{base_fn}_{i}{ext}")):
             if get_next:
                 return i
             return i - 1
     else:
-        raise RuntimeError(f"Could not find latest file index: all {base_fp}_1.pkl to _10000.pkl exist.")
+        raise RuntimeError(f"Could not find latest file index: all {base_fn}_1{ext} to _10000{ext} exist.")
 
 
 @execution_timer
@@ -355,7 +361,7 @@ def save_(fn: str, data: pd.DataFrame, auto_index_on: bool = False) -> None:
 
     fp = get_file_path(fn)  # Use the same function to get the correct path
     if auto_index_on:
-        fp = fp.split(".")[0] + f"_{get_latest_file_index(fn, get_next=True)}." + fp.split(".")[-1]
+        fp = fp.split(".")[0] + f"_{get_latest_file_index(fp, get_next=True)}." + fp.split(".")[-1]
 
     # display saving dataframe
     print(data.sample(n=min(10, len(data))))
