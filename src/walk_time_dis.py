@@ -17,7 +17,7 @@ Import and call the following functions as needed:
 - `get_cdf()`: Calculate CDF from walking time samples.
 """
 import os
-from typing import Callable
+from typing import Callable, Iterable
 
 import numpy as np
 import pandas as pd
@@ -32,7 +32,7 @@ import seaborn as sns
 
 from src import config
 from src.utils import read_, read_all, ts2tstr
-from src.globals import get_afc, get_k_pv
+from src.globals import get_afc, get_k_pv, get_pl_info, get_etd
 
 
 def get_egress_time_from_left() -> pd.DataFrame:
@@ -185,7 +185,7 @@ def get_physical_links_info(et_: pd.DataFrame, platform: dict = None, ) -> np.nd
     return np.array(data)
 
 
-def get_reject_outlier_bd(data: np.ndarray, method: str = "zscore", abs_max: int = 500) -> tuple[float, float]:
+def get_reject_outlier_bd(data: np.ndarray, method: str = "zscore", abs_max: int | None = 500) -> tuple[float, float]:
     """
     Calculate bounds for outlier rejection.
     see:
@@ -505,17 +505,28 @@ def fit_egress_time_dis_all_parallel(
     ])
 
 
-def get_pdf(walk_param: dict[str, float], walk_time: float | np.ndarray) -> float | np.ndarray:
+def node_id_to_pl_id(node_id: int) -> int:
+    """
+    Convert node_id to physical link id.
+    :param node_id: int
+    :return: int
+    """
+    pl_info = get_pl_info()
+    pl_row = pl_info[pl_info[:, 1] == node_id]
+    if pl_row.shape[0] == 0:
+        raise ValueError(f"Node id {node_id} not found in physical links info!")
+    return pl_row[0, 0]
+
+
+def get_pdf(pl_id: int, walk_time: int | Iterable[int], ) -> float | np.ndarray:
     """
     Compute the probability density function (PDF) of walking time.
 
     Parameters
     ----------
-    walk_param : dict[str, float]
-        Dictionary containing parameters of the walking time distribution.
-        Must include keys: 'mu', 'sigma' (for log-normal distribution).
-
-    walk_time : float or Iterable[float]
+    pl_id: int
+        Physical link id.
+    walk_time : int or Iterable[int]
         Actual walking time(s) to evaluate the PDF. Can be a scalar or a 1D array-like object.
 
     Returns
@@ -527,23 +538,30 @@ def get_pdf(walk_param: dict[str, float], walk_time: float | np.ndarray) -> floa
     -----
     This function is vectorized for performance and can operate efficiently over entire columns.
     """
-    ...
+    df_etd = get_etd()
+    df_etd = df_etd[df_etd["pl_id"] == pl_id].set_index("x")
+    pdf_col_name = config.CONFIG["parameters"]["distribution_type"] + "_pdf"
+    walk_time = np.array(walk_time)  # Ensure walk_time is always treated as an array
+    walk_time = np.array([walk_time]) if walk_time.ndim == 0 else walk_time  # Handle scalar input
+
+    pdf_values = df_etd.loc[walk_time, pdf_col_name].values
+
+    return pdf_values if len(pdf_values) > 1 else pdf_values[0]
 
 
-def get_cdf(walk_param: dict[str, float], t_start: float | np.ndarray, t_end: float | np.ndarray) -> float | np.ndarray:
+def get_cdf(pl_id: int, t_start: int | Iterable[int], t_end: int | Iterable[int]) -> float | np.ndarray:
     """
     Compute the cumulative distribution function (CDF) of walking time between t_start and t_end.
 
     Parameters
     ----------
-    walk_param : dict[str, float]
-        Dictionary containing parameters of the walking time distribution.
-        Must include keys: 'mu', 'sigma' (for log-normal distribution).
+    pl_id: int
+        Physical link id.
 
-    t_start : float or Iterable[float]
+    t_start : int or Iterable[int]
         Start time(s) of the interval. Can be a scalar or 1D array-like object.
 
-    t_end : float or Iterable[float]
+    t_end : int or Iterable[int]
         End time(s) of the interval. Must be the same shape as `t_start`.
 
     Returns
@@ -556,9 +574,18 @@ def get_cdf(walk_param: dict[str, float], t_start: float | np.ndarray, t_end: fl
     Computes P(walk_time ∈ [t_start, t_end]).
     Efficiently supports vectorized input for use with entire Series/arrays.
     """
-    ...
+    df_etd = get_etd()
+    df_etd = df_etd[df_etd["pl_id"] == pl_id].set_index("x")
+    cdf_col_name = config.CONFIG["parameters"]["distribution_type"] + "_cdf"
+
+    t_start, t_end = np.array(t_start), np.array(t_end)
+    t_start = np.array([t_start]) if t_start.ndim == 0 else t_start
+    t_end = np.array([t_end]) if t_end.ndim == 0 else t_end
+    if t_start.shape != t_end.shape:
+        raise ValueError("t_start and t_end must have the same shape.")
+
+    cdf_start = df_etd.loc[t_start, cdf_col_name].values
+    cdf_end = df_etd.loc[t_end, cdf_col_name].values
+    return cdf_end - cdf_start if len(cdf_start) > 1 else cdf_end[0] - cdf_start[0]
 
 
-if __name__ == '__main__':
-    # Load the configuration using the config file path
-    config.load_config(config_file="configs/config1.yaml")

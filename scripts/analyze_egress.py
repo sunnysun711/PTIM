@@ -70,7 +70,7 @@ def save_physical_links_info(et_: pd.DataFrame, save_on: bool = False) -> pd.Dat
     Save the physical links information to a CSV file.
     """
     pl_info = get_physical_links_info(platform=None, et_=et_)
-    df_pl = pd.DataFrame(pl_info, columns=["pl_id", "platform_id", "uid"])
+    df_pl = pd.DataFrame(pl_info, columns=["pl_id", "platform_id", "uid"]).set_index("pl_id")
     if save_on:
         save_(fn=config.CONFIG["results"]["physical_links"], data=df_pl, auto_index_on=True)
     return df_pl
