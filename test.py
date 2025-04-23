@@ -106,11 +106,37 @@ def test3():
         pl_info = get_pl_info()
 
 
+def test4():
+    # 从K_PV入手，找到所有换乘link。包括platform_swap和egress-entry。
+    from src.globals import get_k_pv
+    k_pv = get_k_pv()[:, :-2]
+    k_pv = k_pv[k_pv[:, -1] != "in_vehicle"]
+    print(k_pv)
+    print(np.where(k_pv[:, 1] == 1)[0][1:] - 1)
+    last_seg_idx = np.where(k_pv[:, 1] == 1)[0][1:] - 1
+    mask = np.ones(len(k_pv), dtype=bool)
+    mask[last_seg_idx] = False
+    mask[-1] = False
+    print(k_pv[mask & (k_pv[:, 1] != 1)])
+    k_pv = k_pv[mask & (k_pv[:, 1] != 1)]  # only transfer links
+
+    # platform swap
+    k_pv_swap = k_pv[k_pv[:, -1] == "platform_swap"][:, :-1]
+    print(k_pv_swap[:5])  # path_id, pv_id, platform_id1, platform_id2
+
+    # egress-entry
+    k_pv_ee = k_pv[k_pv[:, -1] != "platform_swap"]
+    k_pv_ee = np.hstack((k_pv_ee[::2, :-1], k_pv_ee[1::2, 3:-1]))
+    print(k_pv_ee[:5])  # path_id, pv_id1, platform_id1, uid, platform_id2
+
+
+
 if __name__ == '__main__':
     config.load_config()
     # test1()
     # test2()
     # test3()
+    test4()
     from src.utils import read_
     df = read_(fn = config.CONFIG["results"]["assigned"], show_timer=False, latest_=True)
     print(df)
