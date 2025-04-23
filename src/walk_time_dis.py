@@ -564,15 +564,8 @@ def get_pdf(pl_id: int, walk_time: int | Iterable[int]) -> float | np.ndarray:
     # Ensure walk_time is always treated as an array
     walk_time = np.atleast_1d(walk_time)
 
-    # Use numpy's vectorized operations for efficiency
-    """
-    小规模数据（< 1,000）：列表推导式更快。
-    中等规模数据（1,000 ~ 50,000）：np.fromiter 或 np.vectorize 更合适。
-    大规模数据（> 100,000）：推荐使用 np.fromiter 或其他矢量化方法。
-    """
-    # pdf_values = np.vectorize(x2pdf.get, otypes=[float])(walk_time, 0)
-    pdf_values = np.fromiter((x2pdf[wt] for wt in walk_time), dtype=float)
-    # pdf_values = np.array([x2pdf[wt] for wt in walk_time])
+    # Use NumPy vectorized operations for efficiency
+    pdf_values = np.vectorize(x2pdf.get, otypes=[float])(walk_time, None)
 
     return pdf_values if pdf_values.size > 1 else pdf_values[0]
 
@@ -610,9 +603,7 @@ def get_cdf(pl_id: int, t_start: int | Iterable[int], t_end: int | Iterable[int]
     if t_start.shape != t_end.shape:
         raise ValueError("t_start and t_end must have the same shape.")
 
-    cdf_start = np.fromiter((x2cdf[ts] for ts in t_start), dtype=float)
-    cdf_end = np.fromiter((x2cdf[te] for te in t_end), dtype=float)
-    # cdf_start = np.array([x2cdf[ts] for ts in t_start])
-    # cdf_end = np.array([x2cdf[te] for te in t_end])
+    cdf_start = np.vectorize(x2cdf.get, otypes=[float])(t_start, None)
+    cdf_end = np.vectorize(x2cdf.get, otypes=[float])(t_end, None)
     
     return cdf_end - cdf_start if len(cdf_start) > 1 else cdf_end[0] - cdf_start[0]

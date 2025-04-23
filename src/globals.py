@@ -187,10 +187,10 @@ def get_etd() -> np.ndarray:
         ETD = read_(config.CONFIG["results"]["etd"],
                     show_timer=False, latest_=True)
         ETD = ETD[[
-            "pl_id", "x", f"config.CONFIG['parameters']['distribution_type']_pdf",
-            f"config.CONFIG['parameters']['distribution_type']_cdf",
-            # f"config.CONFIG['parameters']['distribution_type']_ks_stat",
-            # f"config.CONFIG['parameters']['distribution_type']_ks_p_value"
+            "pl_id", "x", f"{config.CONFIG['parameters']['distribution_type']}_pdf",
+            f"{config.CONFIG['parameters']['distribution_type']}_cdf",
+            # f"{config.CONFIG['parameters']['distribution_type']}_ks_stat",
+            # f"{config.CONFIG['parameters']['distribution_type']}_ks_p_value"
         ]]
         ETD.columns = [
             "pl_id", "x", "pdf", "cdf", 

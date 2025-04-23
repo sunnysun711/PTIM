@@ -68,6 +68,7 @@ def save_egress_times(save_on: bool = False) -> pd.DataFrame:
 def save_physical_links_info(et_: pd.DataFrame, save_on: bool = False) -> pd.DataFrame:
     """
     Save the physical links information to a CSV file.
+    :return: DataFrame with index: ["pl_id"] and columns: ["platform_id", "uid"].
     """
     pl_info = get_physical_links_info(platform=None, et_=et_)
     df_pl = pd.DataFrame(pl_info, columns=["pl_id", "platform_id", "uid"]).set_index("pl_id")
@@ -77,6 +78,10 @@ def save_physical_links_info(et_: pd.DataFrame, save_on: bool = False) -> pd.Dat
 
 
 def read_physical_links_info(index: int = None) -> pd.DataFrame:
+    """
+    :param index:
+    :return: DataFrame with index: ["pl_id"] and columns: ["platform_id", "uid"].
+    """
     from src.utils import split_fn_index_ext
     full_fn = config.CONFIG["results"]["physical_links"]
     fn, _, ext = split_fn_index_ext(full_fn)
@@ -117,19 +122,21 @@ def main(physical_links_index: int = None):
     )
     print(info_message)
     et_ = save_egress_times(save_on=True)
+    # et_ = read_(fn="egress_times_1", show_timer=False, latest_=False)  # if already have egress_times_1.pkl
 
     if physical_links_index is None:
         df_pl = save_physical_links_info(et_=et_, save_on=True)
-    else:
+    else:  # if already have physical_links_1.csv
         df_pl = read_physical_links_info(index=physical_links_index)
 
-    plot_egress_time_dis_all(save_subfolder="ETD0", et_=et_, physical_link_info=df_pl.values, save_on=True)
+    plot_egress_time_dis_all(save_subfolder="ETD0", et_=et_, physical_link_info=df_pl.reset_index().values,
+                             save_on=True)
     save_etd(et_=et_, save_on=True)
     pass
 
 
 if __name__ == '__main__':
     config.load_config()
-    # main()
+    main()
     # _check_egress_time_outlier_rejects(uid=None)
     pass
