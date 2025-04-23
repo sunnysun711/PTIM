@@ -37,6 +37,7 @@ TT: np.ndarray | None = None
 AFC: np.ndarray | None = None
 PL_INFO: np.ndarray | None = None
 ETD: np.ndarray | None = None
+LINK_INFO: np.ndarray | None = None
 
 
 def build_k_pv_dic() -> dict[(int, int), np.ndarray]:
@@ -193,10 +194,23 @@ def get_etd() -> np.ndarray:
             # f"{config.CONFIG['parameters']['distribution_type']}_ks_p_value"
         ]]
         ETD.columns = [
-            "pl_id", "x", "pdf", "cdf", 
+            "pl_id", "x", "pdf", "cdf",
             # "ks_stat", "ks_p_value"
         ]
     return ETD.values
+
+
+def get_link_info() -> np.ndarray:
+    """
+    Get global variable LINK_INFO.
+    If LINK_INFO is not initialized, read from link_info.pkl and store in LINK_INFO.
+    :return: Array of shape (n, 4) with columns:
+        ["weight", "node_id1", "node_id2", "link_type"].
+    """
+    global LINK_INFO
+    if LINK_INFO is None:
+        LINK_INFO = read_(config.CONFIG["results"]["link"], show_timer=False, latest_=False).values
+    return LINK_INFO
 
 # ---------------------------
 # Public, frequently used variables (read-only across the project)

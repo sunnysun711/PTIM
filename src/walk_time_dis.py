@@ -16,22 +16,23 @@ Import and call the following functions as needed:
 - `get_pdf()`: Calculate PDF from walking time samples.
 - `get_cdf()`: Calculate CDF from walking time samples.
 """
-from src.globals import get_afc, get_k_pv, get_pl_info, get_etd
-from src.utils import read_, read_all, ts2tstr
-from src import config
-import seaborn as sns
-from matplotlib import pyplot as plt
 import os
 from typing import Callable, Iterable
 
 import numpy as np
 import pandas as pd
 import matplotlib
+
+matplotlib.use('TkAgg')
+import seaborn as sns
+from matplotlib import pyplot as plt
 from joblib import Parallel, delayed
 from scipy.stats import kstest
 from tqdm import tqdm
 
-matplotlib.use('TkAgg')
+from src.globals import get_afc, get_k_pv, get_pl_info, get_etd, get_link_info
+from src.utils import read_, read_all, ts2tstr
+from src import config
 
 
 def get_egress_time_from_left() -> pd.DataFrame:
@@ -537,6 +538,34 @@ def node_id_to_pl_id(node_id: int) -> int:
     return pl_row[0, 0]
 
 
+def get_x2pdf(pl_id: int) -> Callable:
+    """
+    Get the PDF function for a given physical link id.
+    :param pl_id: int
+    :return: Callable, takes one int value x and returns the corresponding PDF value.
+        If x is not in the range of the ETD data, returns 0.
+        If x is in the range of the ETD data, returns the corresponding PDF value.
+    """
+    etd = get_etd()
+    etd = etd[etd[:, 0] == pl_id][:, [1, 2]]  # Keep only x and pdf columns
+    x2pdf = dict(zip(etd[:, 0], etd[:, 1]))  # Create a dictionary mapping x to pdf
+    return lambda x: x2pdf.get(x, 0)
+
+
+def get_x2cdf(pl_id: int) -> Callable:
+    """
+    Get the CDF function for a given physical link id.
+    :param pl_id: int
+    :return: Callable, takes one int value x and returns the corresponding CDF value.
+        If x is not in the range of the ETD data, returns None.
+        If x is in the range of the ETD data, returns the corresponding CDF value.
+    """
+    etd = get_etd()
+    etd = etd[etd[:, 0] == pl_id][:, [1, 3]]  # Keep only x and cdf columns
+    x2cdf = dict(zip(etd[:, 0], etd[:, 1]))  # Create a dictionary mapping x to cdf
+    return lambda x: x2cdf.get(x, None)
+
+
 def get_pdf(pl_id: int, walk_time: int | Iterable[int]) -> float | np.ndarray:
     """
     Compute the probability density function (PDF) of walking time.
@@ -555,15 +584,13 @@ def get_pdf(pl_id: int, walk_time: int | Iterable[int]) -> float | np.ndarray:
     -----
     This function is vectorized for performance and can operate efficiently over entire columns.
     """
-    etd = get_etd()
-    etd = etd[etd[:, 0] == pl_id][:, [1, 2]]  # Keep only x and pdf columns
-    x2pdf = dict(zip(etd[:, 0], etd[:, 1]))  # Create a dictionary mapping x to pdf
+    x2pdf = get_x2pdf(pl_id)
 
     # Ensure walk_time is always treated as an array
     walk_time = np.atleast_1d(walk_time)
 
     # Use NumPy vectorized operations for efficiency
-    pdf_values = np.vectorize(x2pdf.get, otypes=[float])(walk_time, 0)
+    pdf_values = np.vectorize(x2pdf, otypes=[float])(walk_time)
 
     return pdf_values if pdf_values.size > 1 else pdf_values[0]
 
@@ -593,19 +620,44 @@ def get_cdf(pl_id: int, t_start: int | Iterable[int], t_end: int | Iterable[int]
     Computes P(walk_time ∈ [t_start, t_end]).
     Efficiently supports vectorized input for use with entire Series/arrays.
     """
-    etd = get_etd()
-    etd = etd[etd[:, 0] == pl_id][:, [1, 3]]  # Keep only x and cdf columns
-    x2cdf = dict(zip(etd[:, 0], etd[:, 1]))  # Create a dictionary mapping x to cdf
+    x2cdf = get_x2cdf(pl_id)
 
     t_start, t_end = np.atleast_1d(t_start), np.atleast_1d(t_end)
     if t_start.shape != t_end.shape:
         raise ValueError("t_start and t_end must have the same shape.")
 
-    cdf_start = np.vectorize(x2cdf.get, otypes=[float])(t_start, None)
-    cdf_end = np.vectorize(x2cdf.get, otypes=[float])(t_end, None)
+    cdf_start = np.vectorize(x2cdf, otypes=[float])(t_start)
+    cdf_end = np.vectorize(x2cdf, otypes=[float])(t_end)
     if np.isnan(cdf_start).any():
         raise ValueError("CDF_start values contain NaN. Please check the t_start ranges.")
     if np.isnan(cdf_end).any():
         raise ValueError("CDF_end values contain NaN. Please check the t_end ranges.")
 
     return cdf_end - cdf_start if len(cdf_start) > 1 else cdf_end[0] - cdf_start[0]
+
+
+def check_transfer_link(platform_id1: int, platform_id2: int):
+    """
+    Check if there is a transfer link between two platforms.
+    :param platform_id1: int
+    :param platform_id2: int
+    :return: bool
+    """
+    li = get_link_info()
+    li = li[li[:, -1] != "in_vehicle"]
+    if li[(li[:, 1] == platform_id1) & (li[:, 2] == platform_id2)].shape[0] == 1:
+        return "swap"
+    uid = li[(li[:, 1] == platform_id1) & (li[:, -1] == "egress"), 2][0]
+    # 为什么需要检查是否换乘？直接用PV得到的结果就可以看出来了
+
+
+def get_transfer_cdf(platform_id1: int, platform_id2: int, t_start: int | Iterable[int],
+                     t_end: int | Iterable[int]) -> float | np.ndarray[float]:
+    """
+    Get the CDF of transfer time between two platforms.
+    :param platform_id1: int
+    :param platform_id2: int
+    :param t_start: int
+    :param t_end: int
+    :return: float
+    """
