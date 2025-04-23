@@ -137,6 +137,6 @@ def main(physical_links_index: int = None):
 
 if __name__ == '__main__':
     config.load_config()
-    main()
+    # main()
     # _check_egress_time_outlier_rejects(uid=None)
     pass

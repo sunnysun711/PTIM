@@ -46,8 +46,7 @@ def test():
 
     from src.walk_time_dis import get_pdf, get_cdf, node_id_to_pl_id
 
-    res = get_pdf(walk_time=[np.random.randint(low=0, high=500)
-                             for _ in range(50)], pl_id=40)
+    res = get_pdf(walk_time=np.random.randint(low=0, high=600, size=100), pl_id=40)
     print(res)
 
     print(res.shape)
@@ -56,8 +55,8 @@ def test():
 
     res = get_cdf(
         pl_id=40,
-        t_start=[np.random.randint(low=0, high=500) for _ in range(50)],
-        t_end=[np.random.randint(low=0, high=500) for _ in range(50)]
+        t_start=np.random.randint(low=0, high=500, size=100),
+        t_end=np.random.randint(low=0, high=500, size=100),
     )
     print(res)
 
@@ -67,11 +66,11 @@ def test():
         t_end=200
     ))
 
-    print(node_id_to_pl_id(node_id=107511))
+    # print(node_id_to_pl_id(node_id=107511))
 
 
 if __name__ == '__main__':
     config.load_config()
-    test_performance()
-    # test()
+    # test_performance()
+    test()
     pass

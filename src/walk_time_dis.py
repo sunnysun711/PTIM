@@ -541,17 +541,15 @@ def get_pdf(pl_id: int, walk_time: int | Iterable[int]) -> float | np.ndarray:
     """
     Compute the probability density function (PDF) of walking time.
 
-    Parameters
-    ----------
-    pl_id: int
+    :param pl_id: int
         Physical link id.
-    walk_time : int or Iterable[int]
+
+    :param walk_time: int or Iterable[int]
         Actual walking time(s) to evaluate the PDF. Can be a scalar or a 1D array-like object.
 
-    Returns
-    -------
-    float or np.ndarray
-        PDF value(s) corresponding to the input walking time(s).
+    :return: float or np.ndarray
+        PDF value(s) corresponding to the input walking time(s). If walk_time contains values not in range(0, 501),
+        the corresponding PDF values will be 0. (indicating zero probability for these values)
 
     Notes
     -----
@@ -565,7 +563,7 @@ def get_pdf(pl_id: int, walk_time: int | Iterable[int]) -> float | np.ndarray:
     walk_time = np.atleast_1d(walk_time)
 
     # Use NumPy vectorized operations for efficiency
-    pdf_values = np.vectorize(x2pdf.get, otypes=[float])(walk_time, None)
+    pdf_values = np.vectorize(x2pdf.get, otypes=[float])(walk_time, 0)
 
     return pdf_values if pdf_values.size > 1 else pdf_values[0]
 
@@ -598,12 +596,16 @@ def get_cdf(pl_id: int, t_start: int | Iterable[int], t_end: int | Iterable[int]
     etd = get_etd()
     etd = etd[etd[:, 0] == pl_id][:, [1, 3]]  # Keep only x and cdf columns
     x2cdf = dict(zip(etd[:, 0], etd[:, 1]))  # Create a dictionary mapping x to cdf
-    
+
     t_start, t_end = np.atleast_1d(t_start), np.atleast_1d(t_end)
     if t_start.shape != t_end.shape:
         raise ValueError("t_start and t_end must have the same shape.")
 
     cdf_start = np.vectorize(x2cdf.get, otypes=[float])(t_start, None)
     cdf_end = np.vectorize(x2cdf.get, otypes=[float])(t_end, None)
-    
+    if np.isnan(cdf_start).any():
+        raise ValueError("CDF_start values contain NaN. Please check the t_start ranges.")
+    if np.isnan(cdf_end).any():
+        raise ValueError("CDF_end values contain NaN. Please check the t_end ranges.")
+
     return cdf_end - cdf_start if len(cdf_start) > 1 else cdf_end[0] - cdf_start[0]

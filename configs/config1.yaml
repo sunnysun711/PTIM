@@ -42,7 +42,7 @@ parameters:
   theta2: 600
   transfer_deviation: 2
   # parameters for itinerary
-  feas_iti_cnt_limit: 1000
+  feas_iti_cnt_limit: 1000  # more than this number, this rid goes to stashed.pkl
   # parameters for egress
   distribution_type: "kde"  # "kde", "gamma", or "lognorm"
   # parameters for trajectory
