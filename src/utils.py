@@ -382,7 +382,7 @@ def read_all(fn: str, show_timer: bool = False) -> pd.DataFrame:
     """
     dfs = []
     fp = get_file_path(fn)
-    latest_id = get_latest_file_index(fn, get_next=False)
+    latest_id = get_latest_file_index(fp, get_next=False)
     for i in range(1, latest_id + 1):
         file_path = fp.split(".")[0] + f"_{i}." + fp.split(".")[-1]
         if os.path.exists(file_path):
