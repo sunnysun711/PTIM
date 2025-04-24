@@ -16,6 +16,15 @@ Import and call the following functions as needed:
 - `get_pdf()`: Calculate PDF from walking time samples.
 - `get_cdf()`: Calculate CDF from walking time samples.
 """
+from src import config
+from src.utils import read_, read_all, ts2tstr
+from src.globals import get_afc, get_k_pv, get_pl_info, get_etd, get_link_info, get_platform
+from tqdm import tqdm
+from scipy.stats import kstest
+from joblib import Parallel, delayed
+from matplotlib import pyplot as plt
+import seaborn as sns
+from itertools import combinations
 import os
 from typing import Callable, Iterable
 
@@ -24,15 +33,6 @@ import pandas as pd
 import matplotlib
 
 matplotlib.use('TkAgg')
-import seaborn as sns
-from matplotlib import pyplot as plt
-from joblib import Parallel, delayed
-from scipy.stats import kstest
-from tqdm import tqdm
-
-from src.globals import get_afc, get_k_pv, get_pl_info, get_etd, get_link_info
-from src.utils import read_, read_all, ts2tstr
-from src import config
 
 
 def get_egress_time_from_left() -> pd.DataFrame:
@@ -548,7 +548,8 @@ def get_x2pdf(pl_id: int) -> Callable:
     """
     etd = get_etd()
     etd = etd[etd[:, 0] == pl_id][:, [1, 2]]  # Keep only x and pdf columns
-    x2pdf = dict(zip(etd[:, 0], etd[:, 1]))  # Create a dictionary mapping x to pdf
+    # Create a dictionary mapping x to pdf
+    x2pdf = dict(zip(etd[:, 0], etd[:, 1]))
     return lambda x: x2pdf.get(x, 0)
 
 
@@ -562,7 +563,8 @@ def get_x2cdf(pl_id: int) -> Callable:
     """
     etd = get_etd()
     etd = etd[etd[:, 0] == pl_id][:, [1, 3]]  # Keep only x and cdf columns
-    x2cdf = dict(zip(etd[:, 0], etd[:, 1]))  # Create a dictionary mapping x to cdf
+    # Create a dictionary mapping x to cdf
+    x2cdf = dict(zip(etd[:, 0], etd[:, 1]))
     return lambda x: x2cdf.get(x, None)
 
 
@@ -629,26 +631,42 @@ def get_cdf(pl_id: int, t_start: int | Iterable[int], t_end: int | Iterable[int]
     cdf_start = np.vectorize(x2cdf, otypes=[float])(t_start)
     cdf_end = np.vectorize(x2cdf, otypes=[float])(t_end)
     if np.isnan(cdf_start).any():
-        raise ValueError("CDF_start values contain NaN. Please check the t_start ranges.")
+        raise ValueError(
+            "CDF_start values contain NaN. Please check the t_start ranges.")
     if np.isnan(cdf_end).any():
-        raise ValueError("CDF_end values contain NaN. Please check the t_end ranges.")
+        raise ValueError(
+            "CDF_end values contain NaN. Please check the t_end ranges.")
 
     return cdf_end - cdf_start if len(cdf_start) > 1 else cdf_end[0] - cdf_start[0]
 
 
-def check_transfer_link(platform_id1: int, platform_id2: int):
+def exist_swap(platform_id1: int, platform_id2: int, swaps: list[tuple[int, int]]) -> bool:
     """
-    Check if there is a transfer link between two platforms.
+    Check if there is a platform_swap link between two platforms.
     :param platform_id1: int
     :param platform_id2: int
+    :param swaps: list of tuples (platform_id1, platform_id2)
     :return: bool
     """
-    li = get_link_info()
-    li = li[li[:, -1] != "in_vehicle"]
-    if li[(li[:, 1] == platform_id1) & (li[:, 2] == platform_id2)].shape[0] == 1:
-        return "swap"
-    uid = li[(li[:, 1] == platform_id1) & (li[:, -1] == "egress"), 2][0]
-    # 为什么需要检查是否换乘？直接用PV得到的结果就可以看出来了
+    if (platform_id1, platform_id2) in swaps:
+        return True
+    return False
+
+
+def get_swaps() -> list[tuple[int, int]]:
+    """
+    Get all platform swaps.
+    :return: list of tuples (platform_id1, platform_id2)
+    """
+    platform = get_platform()
+    swaps = []
+    for p_grps in platform.values():
+        for p_grp in p_grps:
+            if len(p_grp) >= 2:
+                for a, b in combinations(p_grp, 2):
+                    swaps.append((a, b))
+                    swaps.append((b, a))
+    return swaps
 
 
 def get_transfer_cdf(platform_id1: int, platform_id2: int, t_start: int | Iterable[int],
@@ -661,3 +679,8 @@ def get_transfer_cdf(platform_id1: int, platform_id2: int, t_start: int | Iterab
     :param t_end: int
     :return: float
     """
+    if exist_swap(platform_id1, platform_id2):
+        return np.ones_like(t_start) * 1.0  # todo: check if this is correct
+
+    pl_id1 = node_id_to_pl_id(platform_id1)
+    pl_id2 = node_id_to_pl_id(platform_id2)

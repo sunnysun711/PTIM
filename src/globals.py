@@ -38,6 +38,7 @@ AFC: np.ndarray | None = None
 PL_INFO: np.ndarray | None = None
 ETD: np.ndarray | None = None
 LINK_INFO: np.ndarray | None = None
+PLATFORM: dict | None = None
 
 
 def build_k_pv_dic() -> dict[(int, int), np.ndarray]:
@@ -209,12 +210,19 @@ def get_link_info() -> np.ndarray:
     """
     global LINK_INFO
     if LINK_INFO is None:
-        LINK_INFO = read_(config.CONFIG["results"]["link"], show_timer=False, latest_=False).values
+        LINK_INFO = read_(
+            config.CONFIG["results"]["link"], show_timer=False, latest_=False).values
     return LINK_INFO
 
-# ---------------------------
-# Public, frequently used variables (read-only across the project)
-# ---------------------------
-# K_PV_DICT = build_k_pv_dic()
-# TT = build_tt()
-# AFC = read_("AFC", show_timer=False).drop(columns=["TRAVEL_TIME"]).reset_index().values
+
+def get_platform() -> dict:
+    """
+    Get global variable PLATFORM.
+    If PLATFORM is not initialized, read from platform.json and store in PLATFORM.
+    :return: Dictionary with platform information.
+    """
+    global PLATFORM
+    if PLATFORM is None:
+        PLATFORM = read_(
+            config.CONFIG["results"]["platform"], show_timer=False, latest_=False)
+    return PLATFORM
