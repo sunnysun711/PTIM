@@ -3,64 +3,16 @@ import numpy as np
 import time
 
 from src import config
+from src.globals import get_afc, get_k_pv_dict, get_tt
 
 
 def test1():
-    from src.walk_time_dis import get_x2pdf, get_pdf, node_id_to_pl_id
-    from src.globals import get_k_pv
+    from src.walk_time_dis import get_transfer_time_from_assigned, get_transfer_platform_ids_from_path
 
-    k_pv = get_k_pv()
-    # print(k_pv)
+    path2trans = get_transfer_platform_ids_from_path()  # path_id, seg_id, node1, node2, transfer_type
+    transfer_time = get_transfer_time_from_assigned()  # path_id, seg_id, alight_ts, transfer_time
 
-    k_pv_prev = k_pv[:-1, :]
-    k_pv_next = k_pv[1:, :]
-    transfers = np.where(
-        (k_pv_prev[:, 0] == k_pv_next[:, 0]) & (k_pv_prev[:, 4] == "egress") & (k_pv_next[:, 4] == "entry"))
-
-    transfers_egress = k_pv_prev[transfers][:, [0, 1, 2, 3]]
-    transfers_entry = k_pv_next[transfers][:, [3]]
-    print(transfers_egress, transfers_entry)
-    transfer = np.hstack((transfers_egress, transfers_entry))  # [path_id, pv_id, platform_1, uid, platform_2]
-    transfer = transfer[transfer[:, -2] == 1032]  # 1010: huaishudian 1028: Tianfu Square
-    print(transfer)
-
-    # random select
-    path_id, pv_id, node1, uid, node2 = transfer[np.random.randint(0, transfer.shape[0])]
-    print(node1, node2)
-
-    pl_id1 = node_id_to_pl_id(node_id=node1)
-    pl_id2 = node_id_to_pl_id(node_id=node2)
-    print(pl_id1, pl_id2)
-
-    # path_id = np.random.choice(k_pv[k_pv[:, 1] > 3][:, 0])
-    # print(k_pv[k_pv[:, 0] == path_id])
-
-    x_range = np.arange(0, 501)
-
-    pdf_X = get_pdf(pl_id1, x_range)
-    pdf_Y = get_pdf(pl_id2, x_range)
-
-    pdf_Z = np.zeros(1001)  # Z的取值范围是0到1000
-
-    # 离散卷积
-    for z in range(1001):
-        # pdf_Z[z] = np.sum(pdf_X * np.interp(z - x_range, x_range, pdf_Y, left=0, right=0))
-        # pdf_Z[z] = np.sum(pdf_X * (pdf_Y[z - x_range] if (0 <= z - x_range) else 0))
-        valid_indices = (z - x_range >= 0) & (z - x_range <= 500)  # 确保索引有效
-        pdf_Z[z] = np.sum(pdf_X[valid_indices] * pdf_Y[z - x_range[valid_indices]])
-
-    print(pdf_Z)
-
-    import matplotlib.pyplot as plt
-    plt.plot(np.arange(0, 1001), pdf_Z, label="PDF of X + Y")
-    plt.plot(np.arange(0, 501), pdf_X, label="PDF of X")
-    plt.plot(np.arange(0, 501), pdf_Y, label="PDF of Y")
-    plt.xlabel('z = X + Y')
-    plt.ylabel('f_Z(z)')
-    plt.title('PMF of X + Y')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
+    # platform_id_to_physical_platform_id()
 
 
 def test2():
@@ -106,29 +58,37 @@ def test3():
         pl_info = get_pl_info()
 
 
-def test4():
-    # 从K_PV入手，找到所有换乘link。包括platform_swap和egress-entry。
-    from src.globals import get_k_pv
-    k_pv = get_k_pv()[:, :-2]
-    k_pv = k_pv[k_pv[:, -1] != "in_vehicle"]
-    print(k_pv)
-    print(np.where(k_pv[:, 1] == 1)[0][1:] - 1)
-    last_seg_idx = np.where(k_pv[:, 1] == 1)[0][1:] - 1
-    mask = np.ones(len(k_pv), dtype=bool)
-    mask[last_seg_idx] = False
-    mask[-1] = False
-    print(k_pv[mask & (k_pv[:, 1] != 1)])
-    k_pv = k_pv[mask & (k_pv[:, 1] != 1)]  # only transfer links
+def test_computation_efficiency(tt, condition):
+    # Measure execution time for the list comprehension approach
+    start_time = time.time()
+    trains_comprehension = [(tt[i, 0], tt[i, 5], tt[i + 1, 4]) for i in range(len(tt) - 1) if condition[i]]
+    comprehension_time = time.time() - start_time
 
-    # platform swap
-    k_pv_swap = k_pv[k_pv[:, -1] == "platform_swap"][:, :-1]
-    print(k_pv_swap[:5])  # path_id, pv_id, platform_id1, platform_id2
+    # Measure execution time for the NumPy vectorized approach
+    start_time = time.time()
+    valid_indices = np.where(condition)[0]  # Get indices where condition is True
+    trains_numpy = np.column_stack((tt[valid_indices, 0], tt[valid_indices, 5], tt[valid_indices + 1, 4])).tolist()
+    numpy_time = time.time() - start_time
 
-    # egress-entry
-    k_pv_ee = k_pv[k_pv[:, -1] != "platform_swap"]
-    k_pv_ee = np.hstack((k_pv_ee[::2, :-1], k_pv_ee[1::2, 3:-1]))
-    print(k_pv_ee[:5])  # path_id, pv_id1, platform_id1, uid, platform_id2
+    # Measure execution time for the filtered array approach
+    # start_time = time.time()
+    # tt_filtered = tt[condition]  # Apply condition directly to the array
+    # trains_filtered = np.column_stack((tt_filtered[:-1, 0], tt_filtered[:-1, 5], tt_filtered[1:, 4])).tolist()
+    # filtered_time = time.time() - start_time
 
+    # Print the time taken for each approach
+    print(f"List Comprehension Time: {comprehension_time:.20f} seconds")
+    print(f"NumPy Vectorized Time: {numpy_time:.20f} seconds")
+    # print(f"Filtered Array Time: {filtered_time:.6f} seconds")
+
+    # Return the results
+    print(
+        # trains_comprehension == trains_numpy,
+        trains_comprehension[:10], trains_numpy[:10],
+        len(trains_comprehension), len(trains_numpy),
+        # len(trains_filtered)
+    )
+    return trains_comprehension, trains_numpy
 
 
 if __name__ == '__main__':
@@ -136,10 +96,55 @@ if __name__ == '__main__':
     # test1()
     # test2()
     # test3()
-    test4()
-    from src.utils import read_
-    df = read_(fn = config.CONFIG["results"]["assigned"], show_timer=False, latest_=True)
-    print(df)
+
+    afc = get_afc()
+    k_pv_dict = get_k_pv_dict()
+
+    rid, uid1, ts1, uid2, ts2 = afc[np.random.choice(len(afc))].flatten().tolist()
+    # ts1, ts2 = 20000, 23000
+    print(rid, uid1, uid2, ts1, ts2)
+
+    k_pv = k_pv_dict[(uid1, uid2)]
+    print(k_pv)
+    path_id = k_pv[0, 0]
+    pv = k_pv[k_pv[:, 0] == path_id]
+    for seg in pv:
+        # filter line
+        tt_ = get_tt()
+        nid1=seg[1]
+        nid2=seg[2]
+        line=seg[3]
+        upd=seg[4]
+        start_idx, end_idx = np.searchsorted(tt_[:, 2], [line, line + 1])
+        tt: np.ndarray[int] = tt_[start_idx:end_idx]
+
+        # filter updown
+        start_idx, end_idx = np.searchsorted(tt[:, 3], [upd, upd + 1])
+        tt = tt[start_idx:end_idx]
+
+        # filter od and ts range
+        tt = tt[
+            ((tt[:, 1] == nid1) | (tt[:, 1] == nid2))  # filter nid
+            & (tt[:, 5] > ts1)  # filter ts1
+            & (tt[:, 4] < ts2)  # filter ts2
+            ]
+
+        # Pair finding using vectorized comparison
+        train_ids = tt[:-1, 0] == tt[1:, 0]  # check if train_id is the same for consecutive rows
+        nid1_condition = tt[:-1, 1] == nid1  # check if the first station is _nid1
+        nid2_condition = tt[1:, 1] == nid2  # check if the second station is _nid2
+
+        # Combine conditions
+        condition = train_ids & nid1_condition & nid2_condition
+        test_computation_efficiency(tt, condition)
+        # trains = find_trains(nid1=seg[1], nid2=seg[2], ts1=ts1, ts2=ts2, line=seg[3], upd=seg[4])
+
+    # iti_list = find_feas_iti(k_pv, ts1, ts2)
+    # print(len(iti_list))
+
+    # from src.utils import read_
+    # df = read_(fn = config.CONFIG["results"]["assigned"], show_timer=False, latest_=True)
+    # print(df)
     """
                    rid  iti_id     path_id  seg_id  train_id  board_ts  alight_ts
     0              132       1  1127110101       1  10200773     22740      23821

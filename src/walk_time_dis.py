@@ -123,6 +123,70 @@ def calculate_egress_time(df_last_seg: pd.DataFrame) -> pd.DataFrame:
     return df_last_seg[["node1", "node2", "alight_ts", "ts2", "egress_time"]]
 
 
+def get_transfer_time_from_assigned() -> np.ndarray:
+    """
+    Find transfer times from assigned_*.pkl files.
+    :return: Array with 4 columns:
+        ["path_id", "seg_id", "alight_ts", "transfer_time"]
+        where seg_id is the alighting train segment id, the transfer time is thus considered as the time difference
+        between the alighting time of seg_id and the boarding time of seg_id + 1.
+    """
+    assigned = read_all(config.CONFIG["results"]["assigned"], show_timer=False)
+
+    # delete (rid, iti_id) with only one seg
+    seg_count = assigned.groupby(['rid', 'iti_id'])['seg_id'].transform('nunique')
+    assigned = assigned[seg_count > 1]
+
+    # find rows that need to combine next row's board_ts
+    assigned['next_index'] = assigned.groupby(['rid', 'iti_id'])['seg_id'].shift(-1).notna()
+
+    # calculate transfer time
+    assigned["next_board_ts"] = assigned["board_ts"].shift(-1)
+    assigned = assigned[assigned["next_index"]]
+    assigned["transfer_time"] = assigned["next_board_ts"] - assigned["alight_ts"]
+
+    # get essential data
+    data = assigned[["path_id", "seg_id", "alight_ts", "transfer_time"]].values.astype(int)
+    return data
+
+
+def get_transfer_platform_ids_from_path() -> np.ndarray:
+    """
+
+    :return: Array with 5 columns:
+        ["path_id", "seg_id", "node1", "node2", "transfer_type"]
+        where seg_id is the alighting train segment id, the transfer time is thus considered as the time difference
+        between the alighting time of seg_id and the boarding time of seg_id + 1.
+        where transfer_type is one of "platform_swap", "egress-entry".
+    """
+    # add seg_id in k_pv
+    k_pv_ = get_k_pv()[:, :-2]
+    df = pd.DataFrame(k_pv_, columns=["path_id", "pv_id", "node1", "node2", "link_type"])
+    in_vehicle_df = df[df['link_type'] == 'in_vehicle'].copy()
+    in_vehicle_df['seg_id'] = in_vehicle_df.groupby('path_id').cumcount() + 1
+    df = pd.merge(df, in_vehicle_df[['seg_id']], left_index=True, right_index=True, how='left')
+
+    # delete non-transfer paths
+    path = read_("path", show_timer=False)
+    path_id_with_transfer = path[path["transfer_cnt"] > 0]["path_id"].values
+    df = df[df['path_id'].isin(path_id_with_transfer)]
+
+    # delete first and last pathvia row
+    first_pv_ind = (df["pv_id"] == 1)  # entry
+    last_pv_ind = first_pv_ind.shift(-1)  # egress
+    df = df[~(first_pv_ind | last_pv_ind)].iloc[:-1, :]
+
+    # aggregate egress-entry transfer link
+    df["seg_id"] = df["seg_id"].ffill().astype(int)
+    df["next_node2"] = df["node2"].shift(-1)
+    # fix swap expressions
+    df.loc[df["link_type"] == "platform_swap", "next_node2"] = df["node2"]
+    df.loc[df["link_type"] == "egress", "link_type"] = "egress-entry"  # rename for clarity
+    res = df[df["link_type"].isin(["egress-entry", "platform_swap"])][
+        ["path_id", "seg_id", "node1", "next_node2", "link_type"]].values
+    return res
+
+
 def get_physical_links_info(et_: pd.DataFrame, platform: dict = None, ) -> np.ndarray:
     """
     Get information about physical links based on platform data and egress times.
@@ -524,18 +588,22 @@ def fit_egress_time_dis_all_parallel(
     ])
 
 
-def node_id_to_pl_id(node_id: int) -> int:
+def platform_id_to_physical_platform_id(platform_id: int) -> int:
     """
-    Convert node_id to physical link id.
-    :param node_id: int
+    Convert platform_id to physical platform id. The rule is that physical platform id is the smallest node_id
+    of all platform ids on the same physical platform.
+
+    For example, [102360, 102361] are all on the same physical platform, so the physical platform id is 102360.
+        [104290, 102320] are all on the same physcial platform, so the physcial platform id is 102320.
+    :param platform_id: int
     :return: int
     """
-    pl_info = get_pl_info()
-    pl_row = pl_info[pl_info[:, 1] == node_id]
-    if pl_row.shape[0] == 0:
-        raise ValueError(
-            f"Node id {node_id} not found in physical links info!")
-    return pl_row[0, 0]
+    platform_exceptions = get_platform()
+    for pl_grps in platform_exceptions.values():
+        for pl_grp in pl_grps:
+            if platform_id in pl_grp:
+                return min(pl_grp)
+    return platform_id // 10 * 10
 
 
 def get_x2pdf(pl_id: int) -> Callable:
@@ -652,35 +720,34 @@ def exist_swap(platform_id1: int, platform_id2: int, swaps: list[tuple[int, int]
         return True
     return False
 
+# def get_swaps() -> list[tuple[int, int]]:
+#     """
+#     Get all platform swaps.
+#     :return: list of tuples (platform_id1, platform_id2)
+#     """
+#     platform = get_platform()
+#     swaps = []
+#     for p_grps in platform.values():
+#         for p_grp in p_grps:
+#             if len(p_grp) >= 2:
+#                 for a, b in combinations(p_grp, 2):
+#                     swaps.append((a, b))
+#                     swaps.append((b, a))
+#     return swaps
 
-def get_swaps() -> list[tuple[int, int]]:
-    """
-    Get all platform swaps.
-    :return: list of tuples (platform_id1, platform_id2)
-    """
-    platform = get_platform()
-    swaps = []
-    for p_grps in platform.values():
-        for p_grp in p_grps:
-            if len(p_grp) >= 2:
-                for a, b in combinations(p_grp, 2):
-                    swaps.append((a, b))
-                    swaps.append((b, a))
-    return swaps
 
-
-def get_transfer_cdf(platform_id1: int, platform_id2: int, t_start: int | Iterable[int],
-                     t_end: int | Iterable[int]) -> float | np.ndarray[float]:
-    """
-    Get the CDF of transfer time between two platforms.
-    :param platform_id1: int
-    :param platform_id2: int
-    :param t_start: int
-    :param t_end: int
-    :return: float
-    """
-    if exist_swap(platform_id1, platform_id2):
-        return np.ones_like(t_start) * 1.0  # todo: check if this is correct
-
-    pl_id1 = node_id_to_pl_id(platform_id1)
-    pl_id2 = node_id_to_pl_id(platform_id2)
+# def get_transfer_cdf(platform_id1: int, platform_id2: int, t_start: int | Iterable[int],
+#                      t_end: int | Iterable[int]) -> float | np.ndarray[float]:
+#     """
+#     Get the CDF of transfer time between two platforms.
+#     :param platform_id1: int
+#     :param platform_id2: int
+#     :param t_start: int
+#     :param t_end: int
+#     :return: float
+#     """
+#     if exist_swap(platform_id1, platform_id2):
+#         return np.ones_like(t_start) * 1.0
+#
+#     pl_id1 = node_id_to_pl_id(platform_id1)
+#     pl_id2 = node_id_to_pl_id(platform_id2)

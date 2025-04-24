@@ -625,6 +625,8 @@ class ChengduMetro:
         :param theta2: Parameter for path selection. Default to 600.
         :param transfer_deviation: Transfer deviation from the trans_cnt of shortest_path. Default to 2.
         :return: Path and pathvia dataframes.
+            Path dataframe columns: ["path_id", "length", "transfer_cnt", "path_str"]
+            Pathvia dataframe columns: ["path_id", "pv_id", "node_id1", "node_id2", "link_type", "line", "updown"]
         """
         path_list: list[list] = []
         pathvia_list: list[list] = []
@@ -685,6 +687,8 @@ class ChengduMetro:
         :param transfer_deviation: Max allowed deviation in transfer count.
         :param n_jobs: Number of parallel workers. -1 means using all processors.
         :return: Path and pathvia dataframes.
+            Path dataframe columns: ["path_id", "length", "transfer_cnt", "path_str"]
+            Pathvia dataframe columns: ["path_id", "pv_id", "node_id1", "node_id2", "link_type", "line", "updown"]
         """
         uid_list = self._get_uids()  # all ground nodes
         print(f"[INFO] Start finding K-shortest paths using {n_jobs} threads...")

@@ -223,6 +223,5 @@ def get_platform() -> dict:
     """
     global PLATFORM
     if PLATFORM is None:
-        PLATFORM = read_(
-            config.CONFIG["results"]["platform"], show_timer=False, latest_=False)
+        PLATFORM = read_("platform.json", show_timer=False, latest_=False)
     return PLATFORM
