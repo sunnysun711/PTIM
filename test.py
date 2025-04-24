@@ -7,12 +7,37 @@ from src.globals import get_afc, get_k_pv_dict, get_tt
 
 
 def test1():
+    import pandas as pd
+    from src.utils import read_
+    from src.globals import get_platform
     from src.walk_time_dis import get_transfer_time_from_assigned, get_transfer_platform_ids_from_path
 
     path2trans = get_transfer_platform_ids_from_path()  # path_id, seg_id, node1, node2, transfer_type
+    df_p2t = pd.DataFrame(path2trans, columns=["path_id", "seg_id", "node1", "node2", "transfer_type"])
     transfer_time = get_transfer_time_from_assigned()  # path_id, seg_id, alight_ts, transfer_time
 
     # platform_id_to_physical_platform_id()
+    # print(path2trans)
+    # print(transfer_time)
+    node_info = read_(config.CONFIG["results"]["node"], show_timer=False)
+    node_info = node_info[node_info["LINE_NID"].notna() & (node_info["IS_TRANSFER"] == 1)]
+    node_id2nid = {int(k): int(v) for k, v in node_info["STATION_NID"].to_dict().items()}
+    
+    platform_exceptions = {}  # platform_id, physical_platform_id
+    for pl_grps in get_platform().values():
+        for pl_grp in pl_grps:
+            for platform_id in pl_grp:
+                platform_exceptions[platform_id] = min(pl_grp)
+    
+    # print(node_id2nid)
+    # print(platform_exceptions)
+    for node_id_exception in platform_exceptions:
+        node_id2nid[node_id_exception] = platform_exceptions[node_id_exception]
+    print(node_id2nid)
+    df_p2t["p_node1"] = df_p2t["node1"].map(node_id2nid)
+    df_p2t["p_node2"] = df_p2t["node2"].map(node_id2nid)
+    print(df_p2t)
+    print(df_p2t[df_p2t["p_node1"].isna()])  # Sihe exceptions. to be fixed!
 
 
 def test2():
@@ -93,54 +118,9 @@ def test_computation_efficiency(tt, condition):
 
 if __name__ == '__main__':
     config.load_config()
-    # test1()
+    test1()
     # test2()
     # test3()
-
-    afc = get_afc()
-    k_pv_dict = get_k_pv_dict()
-
-    rid, uid1, ts1, uid2, ts2 = afc[np.random.choice(len(afc))].flatten().tolist()
-    # ts1, ts2 = 20000, 23000
-    print(rid, uid1, uid2, ts1, ts2)
-
-    k_pv = k_pv_dict[(uid1, uid2)]
-    print(k_pv)
-    path_id = k_pv[0, 0]
-    pv = k_pv[k_pv[:, 0] == path_id]
-    for seg in pv:
-        # filter line
-        tt_ = get_tt()
-        nid1=seg[1]
-        nid2=seg[2]
-        line=seg[3]
-        upd=seg[4]
-        start_idx, end_idx = np.searchsorted(tt_[:, 2], [line, line + 1])
-        tt: np.ndarray[int] = tt_[start_idx:end_idx]
-
-        # filter updown
-        start_idx, end_idx = np.searchsorted(tt[:, 3], [upd, upd + 1])
-        tt = tt[start_idx:end_idx]
-
-        # filter od and ts range
-        tt = tt[
-            ((tt[:, 1] == nid1) | (tt[:, 1] == nid2))  # filter nid
-            & (tt[:, 5] > ts1)  # filter ts1
-            & (tt[:, 4] < ts2)  # filter ts2
-            ]
-
-        # Pair finding using vectorized comparison
-        train_ids = tt[:-1, 0] == tt[1:, 0]  # check if train_id is the same for consecutive rows
-        nid1_condition = tt[:-1, 1] == nid1  # check if the first station is _nid1
-        nid2_condition = tt[1:, 1] == nid2  # check if the second station is _nid2
-
-        # Combine conditions
-        condition = train_ids & nid1_condition & nid2_condition
-        test_computation_efficiency(tt, condition)
-        # trains = find_trains(nid1=seg[1], nid2=seg[2], ts1=ts1, ts2=ts2, line=seg[3], upd=seg[4])
-
-    # iti_list = find_feas_iti(k_pv, ts1, ts2)
-    # print(len(iti_list))
 
     # from src.utils import read_
     # df = read_(fn = config.CONFIG["results"]["assigned"], show_timer=False, latest_=True)
