@@ -65,7 +65,15 @@ def find_trains(nid1: int, nid2: int, ts1: int, ts2: int, line: int, upd: int) -
     # Combine conditions
     condition = train_ids & nid1_condition & nid2_condition
 
-    # Prepare result using filtered indices
+    # Prepare result using filtered indices 
+    # todo: CHECK EFFICIENCY 
+    # possibly use:
+    # # 使用布尔索引和 NumPy 向量化操作
+    # valid_indices = np.where(condition)[0]  # 获取满足条件的索引
+    # trains = np.column_stack((tt[valid_indices, 0], tt[valid_indices, 5], tt[valid_indices + 1, 4])).tolist()
+    # or:
+    # tt_filtered = tt[condition]
+    # trains = np.column_stack((tt_filtered[:-1, 0], tt_filtered[:-1, 5], tt_filtered[1:, 4])).tolist()
     trains = [(tt[i, 0], tt[i, 5], tt[i + 1, 4]) for i in range(len(tt) - 1) if condition[i]]
     return trains
 
