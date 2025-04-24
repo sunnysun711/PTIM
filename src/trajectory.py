@@ -31,7 +31,7 @@ from src import config
 from src.utils import read_, save_
 
 
-def split_feas_iti(feas_iti_cnt_limit: int = config.CONFIG["parameters"]["feas_iti_cnt_limit"]):
+def split_feas_iti(feas_iti_cnt_limit: int = None):
     """
     This is a one-step method that splits the feas_iti.pkl into three files:
         1. feas_iti_assigned_1.pkl:
@@ -47,6 +47,8 @@ def split_feas_iti(feas_iti_cnt_limit: int = config.CONFIG["parameters"]["feas_i
         Default is given by config yaml file.
     :return:
     """
+    feas_iti_cnt_limit = config.CONFIG["parameters"][
+        "feas_iti_cnt_limit"] if feas_iti_cnt_limit is None else feas_iti_cnt_limit
     FI = read_(fn=config.CONFIG["results"]["feas_iti"], show_timer=True)  # takes 1 second to load data
     df = FI.drop_duplicates(["rid"], keep="last")
 
@@ -98,7 +100,7 @@ def roll_back_assignment():
     """
     from src.utils import get_file_path, get_latest_file_index
     fp = get_file_path(config.CONFIG["results"]["assigned"])
-    latest_version = get_latest_file_index(config.CONFIG["results"]["assigned"], get_next=False)
+    latest_version = get_latest_file_index(fp, get_next=False)
     fp = fp.split(".")[0] + f"_{latest_version}." + fp.split(".")[-1]
 
     assigned_df = read_(config.CONFIG["results"]["assigned"], latest_=True)

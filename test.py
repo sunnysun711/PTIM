@@ -1,73 +1,11 @@
 # to test and implement GPT-generated code
 
-import matplotlib.pyplot as plt
-from src import config
-
-config.load_config()
-from src.utils import ts2tstr, read_
-from scripts.analyze_egress import save_egress_times
-import pandas as pd
-import seaborn as sns
-import matplotlib
-
-from src.walk_time_dis import get_egress_link_groups
-
-matplotlib.use('TkAgg')
-
-
-def plot_egress_time_distribution2(et: pd.DataFrame, title: str = ""):
-    import numpy as np
-    from scipy.stats import gaussian_kde
-    from scipy.integrate import quad
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-
-    # Generate two groups of normal distribution data
-    np.random.seed(42)
-    data1 = np.random.normal(loc=10, scale=2, size=300)
-    data2 = np.random.normal(loc=20, scale=3, size=200)
-    combined_data = np.concatenate([data1, data2])
-
-    # Perform KDE
-    kde = gaussian_kde(combined_data)
-
-    # Define the range for the variable
-    x_min, x_max = 5, 25  # Limit the range to [5, 25]
-    x_values = np.linspace(x_min, x_max, 1000)
-
-    # Compute PDF
-    pdf_values = kde(x_values)
-
-    # Compute CDF using numerical integration
-    cdf_values = [quad(kde, x_min, x)[0] for x in x_values]
-
-    # Plot PDF
-    plt.figure(figsize=(10, 6))
-    sns.histplot(combined_data, kde=False, bins=30,
-                 stat='density', label='Histogram')
-    plt.plot(x_values, pdf_values, label='PDF (KDE)', color='red')
-    plt.title('PDF with Kernel Density Estimation')
-    plt.xlabel('Value')
-    plt.ylabel('Density')
-    plt.legend()
-    plt.show()
-
-    # Plot CDF
-    plt.figure(figsize=(10, 6))
-    plt.plot(x_values, cdf_values, label='CDF', color='blue')
-    plt.title('CDF from Kernel Density Estimation')
-    plt.xlabel('Value')
-    plt.ylabel('Cumulative Probability')
-    plt.legend()
-    plt.show()
-
-    # Print bandwidth
-    print(f"Bandwidth of KDE: {kde.factor}")
-    return
-
 
 if __name__ == '__main__':
-    from src.walk_time_dis import plot_egress_time_dis_all
+    from src import config
 
-    plot_egress_time_dis_all()
+    config.load_config()
+
+
+
     pass

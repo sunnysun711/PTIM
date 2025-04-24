@@ -93,4 +93,14 @@ def main(read_network: bool):
 if __name__ == "__main__":
     # _test_k_paths()
     # main()
+    config.load_config()
+    nodes, links = get_node_and_link(read_on=True)
+    net = ChengduMetro(nodes=nodes, links=links)
+    import time
+    a = time.time()
+    df_p, df_pv = net.find_all_pairs_k_paths_parallel()
+    df_p.info()
+    df_pv.info()
+    b = time.time()
+    print(f"Elapsed time: {b - a} seconds")
     pass

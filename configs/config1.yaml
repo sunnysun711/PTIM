@@ -20,8 +20,10 @@ results:
   pathvia: "pathvia.pkl"
   feas_iti: "feas_iti.pkl"
   AFC_no_iti: "AFC_no_iti.pkl"
-  egress_times: "egress_times.pkl"
-  assigned: "assigned.pkl"
+  egress_times: "egress_times.pkl"  # auto index
+  etd: "etd.pkl"  # columns: [pl_id, x, kde_pdf, kde_cdf, kde_ks_stat, kde_ks_p_value, gamma_pdf, gamma_cdf, gamma_ks_stat, gamma_ks_p_value, lognorm_pdf, lognorm_cdf, lognorm_ks_stat, lognorm_ks_p_value]
+  physical_links: "physical_links.csv"  # columns: [`pl_id`, `platform_id`, `uid`]
+  assigned: "assigned.pkl"  # auto index
   left: "left.pkl"
   stashed: "stashed.pkl"
 
@@ -42,7 +44,7 @@ parameters:
   # parameters for itinerary
   feas_iti_cnt_limit: 1000
   # parameters for egress
-  distribution_type: "kde"  # "kde" or "gamma"
+  distribution_type: "kde"  # "kde", "gamma", or "lognorm"
   # parameters for trajectory
   strategy: "random"  # "random" or "greedy"
   step_size: 100

@@ -24,6 +24,7 @@ from typing import Iterable
 import networkx as nx
 import numpy as np
 import pandas as pd
+from joblib import Parallel, delayed
 from tqdm import tqdm
 
 from src import config
@@ -615,6 +616,8 @@ class ChengduMetro:
             transfer_deviation: int = 2,
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """
+        LEGACY METHOD: For better performance, please use find_all_pairs_k_paths_parallel.
+
         Find the k shortest paths for all OD pairs (only ground nodes).
 
         :param k: Number of shortest paths to find. Default to 10.
@@ -663,3 +666,106 @@ class ChengduMetro:
         df_pv = pd.DataFrame(
             pathvia_list, columns=["path_id", "pv_id", "node_id1", "node_id2", "link_type", "line", "updown"])
         return df_p, df_pv
+
+    def find_all_pairs_k_paths_parallel(
+            self,
+            k: int = 10,
+            theta1: float = 0.6,
+            theta2: float = 600,
+            transfer_deviation: int = 2,
+            n_jobs: int = -1,
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Parallel version: Find the k shortest paths for all OD pairs (only ground nodes).
+        ETA: ~ 850 seconds (2025-04-20 PC i9-13900K)
+
+        :param k: Number of shortest paths to find. Default to 10.
+        :param theta1: Relative tolerance for max path length.
+        :param theta2: Absolute tolerance for max path length.
+        :param transfer_deviation: Max allowed deviation in transfer count.
+        :param n_jobs: Number of parallel workers. -1 means using all processors.
+        :return: Path and pathvia dataframes.
+        """
+        uid_list = self._get_uids()  # all ground nodes
+        print(f"[INFO] Start finding K-shortest paths using {n_jobs} threads...")
+        results = Parallel(n_jobs=n_jobs)(
+            delayed(self._process_origin)(
+                o_uid=o_uid,
+                uid_list=uid_list,
+                k=k,
+                theta1=theta1,
+                theta2=theta2,
+                transfer_deviation=transfer_deviation
+            )
+            for o_uid in tqdm(uid_list, desc="Parallel OD Path Search")
+        )
+
+        path_list_all = []
+        pathvia_list_all = []
+        for path_list, pathvia_list in results:
+            path_list_all.extend(path_list)
+            pathvia_list_all.extend(pathvia_list)
+
+        df_p = pd.DataFrame(path_list_all, columns=["path_id", "length", "transfer_cnt", "path_str"])
+        df_pv = pd.DataFrame(
+            pathvia_list_all, columns=["path_id", "pv_id", "node_id1", "node_id2", "link_type", "line", "updown"]
+        )
+        return df_p, df_pv
+
+    def _process_origin(
+            self,
+            o_uid: int,
+            uid_list: list[int],
+            k: int,
+            theta1: float,
+            theta2: float,
+            transfer_deviation: int
+    ) -> tuple[list[list], list[list]]:
+        """
+        Process one origin UID, computing k-shortest paths to all other destinations.
+        Returns two lists: path summary and pathvia detail.
+        """
+        path_list = []
+        pathvia_list = []
+
+        try:
+            s_lengths, s_paths = nx.single_source_dijkstra(G=self.G, source=o_uid)
+        except Exception as e:
+            print(f"[ERROR] Dijkstra failed for origin {o_uid}: {e}")
+            return path_list, pathvia_list
+
+        for d_uid in uid_list:
+            if o_uid == d_uid or d_uid not in s_paths:
+                continue
+
+            shortest_path = s_paths[d_uid]
+            shortest_path_length = s_lengths[d_uid]
+            max_path_length = min(shortest_path_length * (1 + theta1), shortest_path_length + theta2)
+
+            lengths, paths = self.find_k_paths_via_yen(
+                shortest_path=shortest_path,
+                shortest_path_length=shortest_path_length,
+                max_length=max_path_length
+            )
+
+            transfers = [self.get_trans_cnt(pa) for pa in paths]
+            if not transfers:
+                continue
+
+            max_transfers = min(transfers) + transfer_deviation
+            k_ = 0
+            base_path_id = int(f"{o_uid}{d_uid}00")
+            for transfer, length, path in zip(transfers, lengths, paths):
+                if transfer <= max_transfers:
+                    k_ += 1
+                    path_id = base_path_id + k_
+                    path_list.append([
+                        path_id, length, transfer,
+                        "_".join(self.compress_passing_info(path=path))
+                    ])
+                    pv = self.get_path_via(path=path, path_id=path_id)
+                    pathvia_list.extend(pv)
+                if k_ >= k:
+                    break
+
+        return path_list, pathvia_list
