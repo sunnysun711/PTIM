@@ -8,3 +8,4 @@ scripts/__pycache__/
 /.vscode/
 /results/
 /figures/
+.ipynb_checkpoints/

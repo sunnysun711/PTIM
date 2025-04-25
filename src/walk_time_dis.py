@@ -35,7 +35,7 @@ import matplotlib
 matplotlib.use('TkAgg')
 
 
-def get_egress_time_from_left() -> pd.DataFrame:
+def filter_egress_time_from_left() -> pd.DataFrame:
     """
     Find rids in left.pkl where all feasible itineraries share the same final train_id.
 
@@ -64,7 +64,7 @@ def get_egress_time_from_left() -> pd.DataFrame:
     return calculate_egress_time(last_seg)
 
 
-def get_egress_time_from_assigned() -> pd.DataFrame:
+def filter_egress_time_from_assigned() -> pd.DataFrame:
     """
     Find rids in all assigned_*.pkl files where all feasible itineraries share the same final train_id.
 
@@ -123,10 +123,10 @@ def calculate_egress_time(df_last_seg: pd.DataFrame) -> pd.DataFrame:
     return df_last_seg[["node1", "node2", "alight_ts", "ts2", "egress_time"]]
 
 
-def get_transfer_time_from_assigned() -> np.ndarray:
+def filter_transfer_time_from_assigned() -> pd.DataFrame:
     """
     Find transfer times from assigned_*.pkl files.
-    :return: Array with 4 columns:
+    :return: DataFrame with 4 columns:
         ["path_id", "seg_id", "alight_ts", "transfer_time"]
         where seg_id is the alighting train segment id, the transfer time is thus considered as the time difference
         between the alighting time of seg_id and the boarding time of seg_id + 1.
@@ -146,8 +146,8 @@ def get_transfer_time_from_assigned() -> np.ndarray:
     assigned["transfer_time"] = assigned["next_board_ts"] - assigned["alight_ts"]
 
     # get essential data
-    data = assigned[["path_id", "seg_id", "alight_ts", "transfer_time"]].values.astype(int)
-    return data
+    res = assigned[["path_id", "seg_id", "alight_ts", "transfer_time"]]
+    return res
 
 
 def get_transfer_platform_ids_from_path() -> np.ndarray:
@@ -185,6 +185,60 @@ def get_transfer_platform_ids_from_path() -> np.ndarray:
     res = df[df["link_type"].isin(["egress-entry", "platform_swap"])][
         ["path_id", "seg_id", "node1", "next_node2", "link_type"]].values
     return res
+
+
+def map_platform_id_to_platform_uid() -> dict:
+    """
+    Get a dictionary mapping platform node_ids to platform_uids.
+
+    Platform_uid is the unique identifier of a platform, which can be either nid or smallest
+        platform_id on the same physical platform.
+
+    The mapping is based on the platform information and exceptions. (Including Sihe Detour (Huafu Avenue) exception)
+
+    :return: A dictionary with platform node_ids as keys and platform UIDs as values.
+    """
+    # get platform_id -> nid dict
+    node_info = read_(config.CONFIG["results"]["node"], show_timer=False)
+    node_info = node_info[node_info["LINE_NID"].notna() & (node_info["IS_TRANSFER"] == 1)]
+    p_id2p_uid = {int(k): int(v) for k, v in node_info["STATION_NID"].to_dict().items()}
+
+    # Add Sihe detour (Huafu Avenue) exception: transfer might happens at 10140 with swap
+    p_id2p_uid.update({101400: 10140, 101401: 10140, })
+
+    # process platform exceptions
+    platform_exceptions = {}  # platform_id -> the smallest platform_id (same physical platform)
+    for pl_grps in get_platform().values():
+        for pl_grp in pl_grps:
+            for platform_id in pl_grp:
+                platform_exceptions[platform_id] = min(pl_grp)
+    # update platform exceptions
+    p_id2p_uid.update(platform_exceptions)
+
+    return p_id2p_uid
+
+
+def map_path_seg_to_transfer_link() -> pd.DataFrame:
+    """
+    Map path segments to transfer links.
+
+    :return: A DataFrame with 7 columns:
+        ["path_id", "seg_id", "node1", "node2", "p_uid_min", "p_uid_max", "transfer_type"]
+        where seg_id is the alighting train segment id, transfer_type is one of "platform_swap", "egress-entry",
+        and p_uid_min, p_uid_max are the platform_uids of the two platforms involved in the transfer.
+    """
+    path2trans = get_transfer_platform_ids_from_path()  # path_id, seg_id, node1, node2, transfer_type
+    df_p2t = pd.DataFrame(path2trans, columns=["path_id", "seg_id", "node1", "node2", "transfer_type"])
+
+    p_id2p_uid = map_platform_id_to_platform_uid()
+
+    # map platform_id to platform_uid, and then get unique tuple with (p_uid_min, p_uid_max)
+    df_p2t["p_uid1"] = df_p2t["node1"].map(p_id2p_uid)
+    df_p2t["p_uid2"] = df_p2t["node2"].map(p_id2p_uid)
+    df_p2t["p_uid_min"] = df_p2t[["p_uid1", "p_uid2"]].min(axis=1)
+    df_p2t["p_uid_max"] = df_p2t[["p_uid1", "p_uid2"]].max(axis=1)
+    df_p2t.drop(columns=["p_uid1", "p_uid2"], inplace=True)
+    return df_p2t
 
 
 def get_physical_links_info(et_: pd.DataFrame, platform: dict = None, ) -> np.ndarray:
@@ -253,7 +307,7 @@ def get_physical_links_info(et_: pd.DataFrame, platform: dict = None, ) -> np.nd
     return np.array(data)
 
 
-def get_reject_outlier_bd(data: np.ndarray, method: str = "zscore", abs_max: int | None = 500) -> tuple[float, float]:
+def reject_outlier_bd(data: np.ndarray, method: str = "zscore", abs_max: int | None = 500) -> tuple[float, float]:
     """
     Calculate bounds for outlier rejection.
     see:
@@ -290,7 +344,7 @@ def get_reject_outlier_bd(data: np.ndarray, method: str = "zscore", abs_max: int
     return lower_bound, upper_bound
 
 
-def reject_outliers(data: np.ndarray, method: str = "zscore", abs_max: int = 500) -> np.ndarray:
+def reject_outlier(data: np.ndarray, method: str = "zscore", abs_max: int = 500) -> np.ndarray:
     """
     Reject outliers from the input data array based on the specified method.
     see:
@@ -305,7 +359,7 @@ def reject_outliers(data: np.ndarray, method: str = "zscore", abs_max: int = 500
     Raises:
         Exception: If an invalid method is provided.
     """
-    lb, ub = get_reject_outlier_bd(data, method=method, abs_max=abs_max)
+    lb, ub = reject_outlier_bd(data, method=method, abs_max=abs_max)
     return data[(data >= lb) & (data <= ub)]
 
 
@@ -447,7 +501,7 @@ def plot_egress_time_dis_all(
                 continue
             title = f"{uid}_{plat_ids}"
             raw_size = et.shape[0]
-            lb, ub = get_reject_outlier_bd(
+            lb, ub = reject_outlier_bd(
                 data=et['egress_time'].values, method="zscore", abs_max=500)
             et = et[(et['egress_time'] >= lb) & (et['egress_time'] <= ub)]
             print(
@@ -530,7 +584,7 @@ def fit_one_pl(pl_id: int, et_: pd.DataFrame, physical_link_info: np.ndarray, x:
     if et.shape[0] == 0:
         return None
     data = et['egress_time'].values
-    data = reject_outliers(data, method="zscore", abs_max=500)
+    data = reject_outlier(data, method="zscore", abs_max=500)
     res_this_pl = [np.ones_like(x) * pl_id, x]
 
     for met in ["kde", "gamma", "lognorm"]:
@@ -588,25 +642,67 @@ def fit_egress_time_dis_all_parallel(
     ])
 
 
-def platform_id_to_physical_platform_id(platform_id: int) -> int:
+def fit_transfer_time_dis_all(df_tt: pd.DataFrame, map_p2t: pd.DataFrame) -> pd.DataFrame:
     """
-    Convert platform_id to physical platform id. The rule is that physical platform id is the smallest node_id
-    of all platform ids on the same physical platform.
+    Fit the distribution of transfer time for all transfer links.
 
-    For example, [102360, 102361] are all on the same physical platform, so the physical platform id is 102360.
-        [104290, 102320] are all on the same physcial platform, so the physcial platform id is 102320.
-    :param platform_id: int
-    :return: int
+    :param df_tt: Filtered transfer time DataFrame with 4 columns:
+        ["path_id", "seg_id", "alight_ts", "transfer_time"]
+        where seg_id is the alighting train segment id, transfer_time is the time difference between the alighting
+        time of seg_id and the boarding time of seg_id + 1.
+    :param map_p2t: DataFrame with 7 columns:
+        ["path_id", "seg_id", "node1", "node2", "p_uid_min", "p_uid_max", "transfer_type"]
+        where seg_id is the alighting train segment id, transfer_type is one of "platform_swap", "egress-entry",
+        and p_uid_min, p_uid_max are the platform_uids of the two platforms involved in the transfer.
+
+    :return: DataFrame with 6 columns:
+        [p_uid1, p_uid2, x, kde_cdf, gamma_cdf, lognorm_cdf]
+        where p_uid1, p_uid2 are platform_uids and p_uid1 is always smaller than p_uid2.
+        For platform_swap transfers, only one row with x = 0 and all cdfs = 1.
     """
-    platform_exceptions = get_platform()
-    for pl_grps in platform_exceptions.values():
-        for pl_grp in pl_grps:
-            if platform_id in pl_grp:
-                return min(pl_grp)
-    return platform_id // 10 * 10
+    print("[INFO] Start fitting transfer time distribution...")
+    # merge df_tt and df_p2t to get (p_uid_min, p_uid_max) -> transfer_time info
+    df = pd.merge(df_tt, map_p2t, on=["path_id", "seg_id"], how="left")
+
+    x = np.linspace(0, 500, 501)
+    res = []
+    # for egress-entry transfers:
+    for (p_uid1, p_uid2), df_ in df[df["transfer_type"] == "egress-entry"].groupby(["p_uid_min", "p_uid_max"])[
+        "transfer_time"]:
+        data = df_.values
+        print(p_uid1, p_uid2, data.size, end=" -> ")
+        data = reject_outlier(data, abs_max=500)
+        print(data.size, end="\t | ")
+
+        res_this_transfer = [np.ones_like(x) * p_uid1, np.ones_like(x) * p_uid2, x]
+        for met in ["kde", "gamma", "lognorm"]:
+            pdf_f, cdf_f = fit_pdf_cdf(data, method=met)
+            cdf_values = cdf_f(x)
+            cdf_values = cdf_values / cdf_values[-1]  # normalize
+            ks_stat, ks_p_val = evaluate_fit(data=data, cdf_func=cdf_f)
+            print(f"{met}: {ks_stat:.4f} {ks_p_val:.4f}", end=" | ")
+            res_this_transfer.extend([cdf_values])
+        res.append(np.vstack(res_this_transfer).T)
+        print()
+    # for platform_swap transfers: just defaults to 1
+    for (p_uid1, p_uid2), df_ in df[df["transfer_type"] == "platform_swap"].groupby(["p_uid_min", "p_uid_max"])[
+        "transfer_time"]:
+        data = df_.values
+        print(p_uid1, p_uid2, data.size)
+        res.append(np.array([[
+            p_uid1, p_uid2, 0, 1, 1, 1
+        ]]))
+    res = np.vstack(res)
+    res = pd.DataFrame(res, columns=[
+        "p_uid1", "p_uid2", "x",
+        "kde_cdf", "gamma_cdf", "lognorm_cdf"
+    ])
+    for col in ["p_uid1", "p_uid2", "x"]:
+        res[col] = res[col].astype(int)
+    return res
 
 
-def get_x2pdf(pl_id: int) -> Callable:
+def map_egress_x2pdf(pl_id: int) -> Callable:
     """
     Get the PDF function for a given physical link id.
     :param pl_id: int
@@ -621,7 +717,7 @@ def get_x2pdf(pl_id: int) -> Callable:
     return lambda x: x2pdf.get(x, 0)
 
 
-def get_x2cdf(pl_id: int) -> Callable:
+def map_egress_x2cdf(pl_id: int) -> Callable:
     """
     Get the CDF function for a given physical link id.
     :param pl_id: int
@@ -636,12 +732,13 @@ def get_x2cdf(pl_id: int) -> Callable:
     return lambda x: x2cdf.get(x, None)
 
 
-def get_pdf(pl_id: int, walk_time: int | Iterable[int]) -> float | np.ndarray:
+def cal_pdf(x2pdf: Callable, walk_time: int | Iterable[int]) -> float | np.ndarray:
     """
     Compute the probability density function (PDF) of walking time.
 
-    :param pl_id: int
-        Physical link id.
+    :param x2pdf: Callable
+        Function that maps a walking time to its corresponding PDF value.
+        It should take a single integer as input and return a float.
 
     :param walk_time: int or Iterable[int]
         Actual walking time(s) to evaluate the PDF. Can be a scalar or a 1D array-like object.
@@ -654,8 +751,6 @@ def get_pdf(pl_id: int, walk_time: int | Iterable[int]) -> float | np.ndarray:
     -----
     This function is vectorized for performance and can operate efficiently over entire columns.
     """
-    x2pdf = get_x2pdf(pl_id)
-
     # Ensure walk_time is always treated as an array
     walk_time = np.atleast_1d(walk_time)
 
@@ -665,14 +760,15 @@ def get_pdf(pl_id: int, walk_time: int | Iterable[int]) -> float | np.ndarray:
     return pdf_values if pdf_values.size > 1 else pdf_values[0]
 
 
-def get_cdf(pl_id: int, t_start: int | Iterable[int], t_end: int | Iterable[int]) -> float | np.ndarray:
+def cal_cdf(x2cdf: Callable, t_start: int | Iterable[int], t_end: int | Iterable[int]) -> float | np.ndarray:
     """
     Compute the cumulative distribution function (CDF) of walking time between t_start and t_end.
 
     Parameters
     ----------
-    pl_id: int
-        Physical link id.
+    x2cdf : Callable
+        Function that maps a walking time to its corresponding CDF value.
+        It should take a single integer as input and return a float.
 
     t_start : int or Iterable[int]
         Start time(s) of the interval. Can be a scalar or 1D array-like object.
@@ -690,8 +786,6 @@ def get_cdf(pl_id: int, t_start: int | Iterable[int], t_end: int | Iterable[int]
     Computes P(walk_time ∈ [t_start, t_end]).
     Efficiently supports vectorized input for use with entire Series/arrays.
     """
-    x2cdf = get_x2cdf(pl_id)
-
     t_start, t_end = np.atleast_1d(t_start), np.atleast_1d(t_end)
     if t_start.shape != t_end.shape:
         raise ValueError("t_start and t_end must have the same shape.")
@@ -707,18 +801,17 @@ def get_cdf(pl_id: int, t_start: int | Iterable[int], t_end: int | Iterable[int]
 
     return cdf_end - cdf_start if len(cdf_start) > 1 else cdf_end[0] - cdf_start[0]
 
-
-def exist_swap(platform_id1: int, platform_id2: int, swaps: list[tuple[int, int]]) -> bool:
-    """
-    Check if there is a platform_swap link between two platforms.
-    :param platform_id1: int
-    :param platform_id2: int
-    :param swaps: list of tuples (platform_id1, platform_id2)
-    :return: bool
-    """
-    if (platform_id1, platform_id2) in swaps:
-        return True
-    return False
+# def exist_swap(platform_id1: int, platform_id2: int, swaps: list[tuple[int, int]]) -> bool:
+#     """
+#     Check if there is a platform_swap link between two platforms.
+#     :param platform_id1: int
+#     :param platform_id2: int
+#     :param swaps: list of tuples (platform_id1, platform_id2)
+#     :return: bool
+#     """
+#     if (platform_id1, platform_id2) in swaps:
+#         return True
+#     return False
 
 # def get_swaps() -> list[tuple[int, int]]:
 #     """

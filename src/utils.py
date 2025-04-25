@@ -195,6 +195,13 @@ def determine_results_subfolder(fn: str) -> str:
         return config.CONFIG["results_subfolder"]["itinerary"]
 
     elif fn in [
+        config.CONFIG["results"]["assigned"],
+        config.CONFIG["results"]["left"],
+        config.CONFIG["results"]["stashed"]
+    ]:
+        return config.CONFIG["results_subfolder"]["trajectory"]
+
+    elif fn in [
         config.CONFIG["results"]["egress_times"],
         config.CONFIG["results"]["physical_links"],
         config.CONFIG["results"]["etd"]
@@ -202,11 +209,12 @@ def determine_results_subfolder(fn: str) -> str:
         return config.CONFIG["results_subfolder"]["egress"]
 
     elif fn in [
-        config.CONFIG["results"]["assigned"],
-        config.CONFIG["results"]["left"],
-        config.CONFIG["results"]["stashed"]
+        config.CONFIG["results"]["transfer_times"],
+        config.CONFIG["results"]["ttd"],
+        config.CONFIG["results"]["transfer_links"]
     ]:
-        return config.CONFIG["results_subfolder"]["trajectory"]
+        return config.CONFIG["results_subfolder"]["transfer"]
+
     else:
         raise ValueError(f"Unknown file to determine results subfolder: {fn}")
 
@@ -391,7 +399,7 @@ def read_all(fn: str, show_timer: bool = False) -> pd.DataFrame:
             break  # stop when gap is hit
     if not dfs:
         raise FileNotFoundError(f"No versioned files found for {fn}")
-    print(f"[INFO] Loaded {len(dfs)} versioned files for {fn}")
+    print(f"[INFO] Reading {len(dfs)} versioned files: {fp}")
     return pd.concat(dfs, ignore_index=True)
 
 

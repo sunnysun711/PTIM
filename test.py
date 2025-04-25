@@ -4,40 +4,15 @@ import time
 
 from src import config
 from src.globals import get_afc, get_k_pv_dict, get_tt
+from src.walk_time_dis import reject_outlier, map_platform_id_to_platform_uid, fit_transfer_time_dis_all, \
+    map_path_seg_to_transfer_link
 
 
 def test1():
-    import pandas as pd
-    from src.utils import read_
-    from src.globals import get_platform
-    from src.walk_time_dis import get_transfer_time_from_assigned, get_transfer_platform_ids_from_path
-
-    path2trans = get_transfer_platform_ids_from_path()  # path_id, seg_id, node1, node2, transfer_type
-    df_p2t = pd.DataFrame(path2trans, columns=["path_id", "seg_id", "node1", "node2", "transfer_type"])
-    transfer_time = get_transfer_time_from_assigned()  # path_id, seg_id, alight_ts, transfer_time
-
-    # platform_id_to_physical_platform_id()
-    # print(path2trans)
-    # print(transfer_time)
-    node_info = read_(config.CONFIG["results"]["node"], show_timer=False)
-    node_info = node_info[node_info["LINE_NID"].notna() & (node_info["IS_TRANSFER"] == 1)]
-    node_id2nid = {int(k): int(v) for k, v in node_info["STATION_NID"].to_dict().items()}
-    
-    platform_exceptions = {}  # platform_id, physical_platform_id
-    for pl_grps in get_platform().values():
-        for pl_grp in pl_grps:
-            for platform_id in pl_grp:
-                platform_exceptions[platform_id] = min(pl_grp)
-    
-    # print(node_id2nid)
-    # print(platform_exceptions)
-    for node_id_exception in platform_exceptions:
-        node_id2nid[node_id_exception] = platform_exceptions[node_id_exception]
-    print(node_id2nid)
-    df_p2t["p_node1"] = df_p2t["node1"].map(node_id2nid)
-    df_p2t["p_node2"] = df_p2t["node2"].map(node_id2nid)
-    print(df_p2t)
-    print(df_p2t[df_p2t["p_node1"].isna()])  # Sihe exceptions. to be fixed!
+    # res = fit_transfer_time_dis_all()
+    res = map_path_seg_to_transfer_link()
+    print(res.shape)
+    print(res)
 
 
 def test2():

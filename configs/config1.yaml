@@ -11,21 +11,32 @@ results_subfolder:
   network: "network"
   path: "path"
   itinerary: "itinerary"
-  egress: "egress"
   trajectory: "trajectory"
+  egress: "egress"
+  transfer: "transfer"
 results:
+  # network:
   node: "node_info.pkl"
   link: "link_info.pkl"
+  # path:
   path: "path.pkl"
   pathvia: "pathvia.pkl"
+  # itinerary:
   feas_iti: "feas_iti.pkl"
   AFC_no_iti: "AFC_no_iti.pkl"
-  egress_times: "egress_times.pkl"  # auto index
-  etd: "etd.pkl"  # columns: [pl_id, x, kde_pdf, kde_cdf, kde_ks_stat, kde_ks_p_value, gamma_pdf, gamma_cdf, gamma_ks_stat, gamma_ks_p_value, lognorm_pdf, lognorm_cdf, lognorm_ks_stat, lognorm_ks_p_value]
-  physical_links: "physical_links.csv"  # columns: [`pl_id`, `platform_id`, `uid`]
+  # trajectory:
   assigned: "assigned.pkl"  # auto index
   left: "left.pkl"
   stashed: "stashed.pkl"
+  # egress:
+  egress_times: "egress_times.pkl"  # auto index
+  etd: "etd.pkl"  # columns: [pl_id, x, kde_pdf, kde_cdf, kde_ks_stat, kde_ks_p_value, gamma_pdf, gamma_cdf, gamma_ks_stat, gamma_ks_p_value, lognorm_pdf, lognorm_cdf, lognorm_ks_stat, lognorm_ks_p_value]
+  physical_links: "physical_links.csv"  # columns: [`pl_id`, `platform_id`, `uid`]
+  # transfer:
+  transfer_times: "transfer_times.pkl"  # auto index
+  ttd: "ttd.pkl"  # columns: [plat_uid1, plat_uid2, kde_pdf, kde_cdf, kde_ks_stat, kde_ks_p_value]
+  transfer_links: "transfer_links.csv"  # columns: [`path_id`, `seg_id`, `node1`, `node2`, `p_uid1`, `p_uid2`, `transfer_type`]
+
 
 figure_folder: "figures"
 

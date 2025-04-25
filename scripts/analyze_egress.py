@@ -3,14 +3,14 @@ import pandas as pd
 
 from src import config
 from src.utils import save_, read_
-from src.walk_time_dis import get_egress_time_from_left, get_egress_time_from_assigned, \
+from src.walk_time_dis import filter_egress_time_from_left, filter_egress_time_from_assigned, \
     plot_egress_time_dis_all, get_physical_links_info, fit_egress_time_dis_all_parallel
 
 
 def _check_egress_time_outlier_rejects(uid: int = None):
     config.load_config()
     from src.utils import read_
-    from src.walk_time_dis import get_reject_outlier_bd, plot_egress_time_dis
+    from src.walk_time_dis import reject_outlier_bd, plot_egress_time_dis
 
     et_ = read_(fn="egress_times_1", show_timer=False, latest_=False)
 
@@ -41,7 +41,7 @@ def _check_egress_time_outlier_rejects(uid: int = None):
             show_=True  # save if show_ is False
         )
 
-        lb, ub = get_reject_outlier_bd(data=et['egress_time'].values, method="zscore", abs_max=None)
+        lb, ub = reject_outlier_bd(data=et['egress_time'].values, method="zscore", abs_max=None)
         et = et[(et['egress_time'] >= lb) & (et['egress_time'] <= ub)]
         print(f"Bounded by [{lb}, {ub}]: ", et.shape[0])
         plot_egress_time_dis(
@@ -57,8 +57,8 @@ def save_egress_times(save_on: bool = False) -> pd.DataFrame:
     "rid" as index.
     ["node1", "node2", "alight_ts", "ts2", "egress_time"] as columns.
     """
-    df1 = get_egress_time_from_left()
-    df2 = get_egress_time_from_assigned()
+    df1 = filter_egress_time_from_left()
+    df2 = filter_egress_time_from_assigned()
     df = pd.concat([df1, df2], ignore_index=True)
     if save_on:
         save_(fn=config.CONFIG["results"]["egress_times"], data=df, auto_index_on=True)
