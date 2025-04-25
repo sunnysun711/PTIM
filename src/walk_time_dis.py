@@ -363,20 +363,22 @@ def reject_outlier(data: np.ndarray, method: str = "zscore", abs_max: int = 500)
     return data[(data >= lb) & (data <= ub)]
 
 
-def plot_egress_time_dis(
-        egress_time: np.ndarray, alight_ts: np.ndarray, title: str = "", show_: bool = True
+def plot_walk_time_dis(
+        walk_time: np.ndarray, alight_ts: np.ndarray, title: str = "", show_: bool = True, fit_curves: list[str] = None,
 ) -> None | plt.Figure:
     """
-    Visualize egress time distribution through a composite plot containing:
-    - Scatter plot of egress times vs alighting times
-    - Histogram of egress time distribution
-    - Boxplot of egress times by time bins
+    Visualize walk time distribution through a composite plot containing:
+    - Scatter plot of walk times vs alighting times
+    - Histogram of walk time distribution
+    - Boxplot of walk times by time bins
 
     Parameters:
-        egress_time (np.ndarray): Array of egress times in seconds
+        walk_time (np.ndarray): Array of walk times in seconds
         alight_ts (np.ndarray): Array of alighting timestamps in seconds since midnight
         title (str): Additional title text for the plot
         show_ (bool): If True, displays the plot; if False, return the figure object
+        fit_curves: List of curve names to fit and plot, e.g., ["kde", "gamma", "lognorm"].
+            If None, all three fitting will be done.
 
     Returns:
         None or plt.Figure: If show_ is True, returns None; otherwise, returns the figure object
@@ -388,43 +390,50 @@ def plot_egress_time_dis(
     # - Bottom-left: boxplot (full width)
     fig = plt.figure(figsize=(10, 6))
     grid = plt.GridSpec(2, 2, height_ratios=[4, 1], width_ratios=[1, 0.25])
+    fit_curves = ["kde", "gamma", "lognorm"] if fit_curves is None else fit_curves
 
-    # Histogram of the egress time distribution (all day)
+    # Histogram of the walk time distribution (all day)
     ax_right = fig.add_subplot(grid[0, 1])
     # check usage: https://seaborn.pydata.org/generated/seaborn.histplot.html
     n_bins = 30
-    bin_width = (egress_time.max() - egress_time.min()) / n_bins
-    scale = bin_width * egress_time.size
+    bin_width = (walk_time.max() - walk_time.min()) / n_bins
+    scale = bin_width * walk_time.size
     sns.histplot(
-        y=egress_time, kde=False, ax=ax_right, color="blue", alpha=0.3, bins=n_bins, stat='count', element="bars")
-    x_values = np.linspace(0, 500, 501)
-    kde_pdf, _ = fit_pdf_cdf(egress_time, method="kde")
-    ax_right.plot(kde_pdf(x_values) * scale, x_values,
-                  color="red", label="KDE Fit", lw=1)
+        y=walk_time, kde=False, ax=ax_right, color="blue", alpha=0.3, bins=n_bins, stat='count', element="bars")
 
-    # to show all fits
-    gamma_pdf, _ = fit_pdf_cdf(egress_time, method="gamma")
-    lognorm_pdf, _ = fit_pdf_cdf(egress_time, method="lognorm")
-    ax_right.plot(gamma_pdf(x_values) * scale, x_values,
-                  color="green", label="Gamma Fit", lw=1)
-    ax_right.plot(lognorm_pdf(x_values) * scale, x_values,
-                  color="orange", label="LogNormal Fit", lw=1)
+    x_values = np.linspace(0, 500, 501)
+    if "kde" in fit_curves:
+        # Fit KDE and plot it on the histogram
+        kde_pdf, _ = fit_pdf_cdf(walk_time, method="kde")
+        ax_right.plot(kde_pdf(x_values) * scale, x_values,
+                      color="red", label="KDE Fit", lw=1)
+    if "gamma" in fit_curves:
+        # Fit Gamma and LogNormal distributions and plot them on the histogram
+        gamma_pdf, _ = fit_pdf_cdf(walk_time, method="gamma")
+        ax_right.plot(gamma_pdf(x_values) * scale, x_values,
+                      color="green", label="Gamma Fit", lw=1)
+
+    if "lognorm" in fit_curves:
+        lognorm_pdf, _ = fit_pdf_cdf(walk_time, method="lognorm")
+        ax_right.plot(lognorm_pdf(x_values) * scale, x_values,
+                      color="orange", label="LogNormal Fit", lw=1)
 
     ax_right.set_xlabel("Frequency")
     ax_right.set_ylabel("")
-    ax_right.legend()
+    if fit_curves:
+        ax_right.legend()
 
-    # Scatter plot showing relationship between alighting time and egress time
+    # Scatter plot showing relationship between alighting time and walk time
     ax_main = fig.add_subplot(grid[0, 0], sharey=ax_right)
-    ax_main.scatter(alight_ts, egress_time, alpha=0.4)
+    ax_main.scatter(alight_ts, walk_time, alpha=0.4)
     # ax_scatter.set_xlabel("Alight Timestamp")
-    ax_main.set_ylabel("Egress Time")
+    ax_main.set_ylabel("Walk Time")
     # Set x-axis ticks to show hourly labels from 6:00 to 24:00
     ax_main.set_xticks(range(6 * 3600, 24 * 3600 + 1, 3600))
     ax_main.set_xticklabels([f"{i:02}" for i in range(6, 25, 1)])
     ax_main.set_xlim(6 * 3600, 24 * 3600)
-    ax_main.set_ylim(egress_time.min() - 10, egress_time.max() + 10)
-    ax_main.set_title("Egress Time Distribution " + title)
+    ax_main.set_ylim(walk_time.min() - 10, walk_time.max() + 10)
+    ax_main.set_title("Walk Time Distribution " + title)
     ax_main.set_xlabel("Alight Timestamp (Hour)")
 
     # Boxplot of egress time versus alight_ts, with customized bin width
@@ -432,9 +441,9 @@ def plot_egress_time_dis(
     alight_ts_binned = (alight_ts // _bin_width) * _bin_width
 
     ax_bottom = fig.add_subplot(grid[1, 0])
-    sns.boxplot(x=alight_ts_binned, y=egress_time, ax=ax_bottom)
+    sns.boxplot(x=alight_ts_binned, y=walk_time, ax=ax_bottom)
     ax_bottom.set_xlabel(f"Alight Timestamp")
-    ax_bottom.set_ylabel("Egress Time")
+    ax_bottom.set_ylabel("Walk Time")
     # Set x-axis ticks to show 30-minute intervals
     ax_bottom.set_xticks(
         [i - 0.5 for i in range((24 - 6) * 3600 // _bin_width + 1)])
@@ -454,9 +463,9 @@ def plot_egress_time_dis(
 
 
 def plot_egress_time_dis_all(
+        et_: pd.DataFrame,
+        physical_link_info: np.ndarray,
         save_subfolder: str = "",
-        et_: pd.DataFrame = None,
-        physical_link_info: np.ndarray = None,
         save_on: bool = True,
 ):
     """
@@ -473,20 +482,14 @@ def plot_egress_time_dis_all(
     :param save_subfolder: The subfolder where plots will be saved.
         If not specified, plots are saved in the default figure folder.
 
-    :param et_: Optional DataFrame containing egress time data.
-        If not provided, the function attempts to read the data from `egress_times_1.pkl`.
+    :param et_: DataFrame containing egress time data.
+        "rid" as index. ["node1", "node2", "alight_ts", "ts2", "egress_time"] as columns.
 
-    :param physical_link_info: Optional numpy array with `pl_id`, `platform_id`, `uid`.
+    :param physical_link_info: Numpy array with `pl_id`, `platform_id`, `uid`.
 
-    :param save_on: If True, the plots are saved to files. If False, the plots are returned as figure
-        objects for further use or analysis.
+    :param save_on: If True, the plots are saved to files. If False, the plots are displayed.
 
     """
-    et_ = et_ if et_ is not None else read_(
-        fn="egress_times_1.pkl", show_timer=False)
-    physical_link_info = physical_link_info if physical_link_info is not None else get_physical_links_info(
-        et_=et_)
-
     saving_dir = config.CONFIG["figure_folder"] + "/" + save_subfolder
     if save_subfolder and not os.path.exists(saving_dir):
         os.makedirs(saving_dir)
@@ -499,22 +502,93 @@ def plot_egress_time_dis_all(
             et = et_[et_["node1"].isin(plat_ids)]
             if et.shape[0] == 0:
                 continue
-            title = f"{uid}_{plat_ids}"
+            title = f" - Egress {uid}_{plat_ids}"
             raw_size = et.shape[0]
             lb, ub = reject_outlier_bd(
                 data=et['egress_time'].values, method="zscore", abs_max=500)
             et = et[(et['egress_time'] >= lb) & (et['egress_time'] <= ub)]
             print(
-                f"{title} | Data size: {et.shape[0]} / {raw_size} | BD: [{lb:.4f}, {ub:.4f}]")
+                f"{title[3:]} | Data size: {et.shape[0]} / {raw_size} | BD: [{lb:.4f}, {ub:.4f}]")
 
-            fig = plot_egress_time_dis(
-                egress_time=et['egress_time'].values, alight_ts=et['alight_ts'].values, title=title,
+            fig = plot_walk_time_dis(
+                walk_time=et['egress_time'].values, alight_ts=et['alight_ts'].values, title=title,
                 show_=not save_on  # return figure if not showing; return None if showing
             )
             if fig is not None:  # Save the plot to PDF file and a small png file for preview
-                fig.savefig(fname=f"{saving_dir}/ETD_{title}.pdf", dpi=600)
-                fig.savefig(fname=f"{saving_dir}/ETD_{title}.png", dpi=100)
+                fig.savefig(fname=f"{saving_dir}/ETD_{title[10:]}.pdf", dpi=600)
+                fig.savefig(fname=f"{saving_dir}/ETD_{title[10:]}.png", dpi=100)
                 plt.close(fig)
+    return
+
+
+def plot_transfer_time_dis_all(
+        df_tt: pd.DataFrame,
+        map_p2t: pd.DataFrame,
+        save_subfolder: str = "",
+        save_on: bool = True,
+):
+    """
+    Generates and saves transfer time distribution plots for all transfer links, including scatter plots,
+    histograms, and box plots. The plots visualize the relationship between transfer times and alighting
+    timestamps, with outliers rejected based on z-score method.
+
+    The plots are saved as PDF and PNG files to the specified directory.
+    Parameters:
+    ------
+    :param df_tt: Optional DataFrame containing transfer time data.
+
+    :param map_p2t: Optional DataFrame mapping physical links to transfer links.
+
+    :param save_subfolder: The subfolder where plots will be saved.
+        If not specified, plots are saved in the default figure folder.
+    :param save_on: If True, the plots are saved to files. If False, the plots are displayed.
+    """
+    saving_dir = config.CONFIG["figure_folder"] + "/" + save_subfolder
+    if save_subfolder and not os.path.exists(saving_dir):
+        os.makedirs(saving_dir)
+
+    print("[INFO] Plotting TTD...")
+    df = pd.merge(df_tt, map_p2t, on=["path_id", "seg_id"], how="left")
+
+    # egress-entry transfers
+    for (p_uid1, p_uid2), df_ in df[df["transfer_type"] == "egress-entry"].groupby(
+            ["p_uid_min", "p_uid_max"])[["transfer_time", "alight_ts"]]:
+        title = f" - Transfer egress-entry {p_uid1}-{p_uid2}"
+        raw_size = df_.shape[0]
+        data_bd = reject_outlier_bd(
+            data=df_["transfer_time"].values, method="zscore", abs_max=500)
+        df_ = df_[(df_["transfer_time"] >= data_bd[0]) & (df_["transfer_time"] <= data_bd[1])]
+        print(f"{title[3:]} | Data size: {df_.shape[0]} / {raw_size} | BD: [{data_bd[0]}, {data_bd[1]}]")
+
+        fig = plot_walk_time_dis(
+            walk_time=df_["transfer_time"], alight_ts=df_["alight_ts"].values, title=title,
+            show_=not save_on,  # return figure if not showing; return None if showing
+            fit_curves=None,  # ["kde", "gamma", "lognorm"]
+        )
+        if fig is not None:  # Save the plot to PDF file and a small png file for preview
+            fig.savefig(fname=f"{saving_dir}/TTD_{title[12:]}.pdf", dpi=600)
+            fig.savefig(fname=f"{saving_dir}/TTD_{title[12:]}.png", dpi=100)
+            plt.close(fig)
+
+    # platform-swap transfers
+    for (p_uid1, p_uid2), df_ in df[df["transfer_type"] == "platform_swap"].groupby(
+            ["p_uid_min", "p_uid_max"])[["transfer_time", "alight_ts"]]:
+        title = f" - Transfer platform_swap {p_uid1}-{p_uid2}"
+        raw_size = df_.shape[0]
+        data_bd = reject_outlier_bd(
+            data=df_["transfer_time"].values, method="zscore", abs_max=500)
+        df_ = df_[(df_["transfer_time"] >= data_bd[0]) & (df_["transfer_time"] <= data_bd[1])]
+        print(f"{title[3:]} | Data size: {df_.shape[0]} / {raw_size} | BD: [{data_bd[0]}, {data_bd[1]}]")
+
+        fig = plot_walk_time_dis(
+            walk_time=df_['transfer_time'], alight_ts=df_["alight_ts"].values, title=title,
+            show_=not save_on,  # return figure if not showing; return None if showing
+            fit_curves=[],  # ["kde", "gamma", "lognorm"]
+        )
+        if fig is not None:  # Save the plot to PDF file and a small png file for preview
+            fig.savefig(fname=f"{saving_dir}/TTD_{title[12:]}.pdf", dpi=600)
+            fig.savefig(fname=f"{saving_dir}/TTD_{title[12:]}.png", dpi=100)
+            plt.close(fig)
     return
 
 
@@ -702,43 +776,38 @@ def fit_transfer_time_dis_all(df_tt: pd.DataFrame, map_p2t: pd.DataFrame) -> pd.
     return res
 
 
-def map_egress_x2pdf(pl_id: int) -> Callable:
+def map_egress_x2pdf(pl_id: int) -> dict[int, float]:
     """
-    Get the PDF function for a given physical link id.
+    Get the PDF values for a given physical link id.
+
     :param pl_id: int
-    :return: Callable, takes one int value x and returns the corresponding PDF value.
-        If x is not in the range of the ETD data, returns 0.
-        If x is in the range of the ETD data, returns the corresponding PDF value.
+    :return: Dictionary, mapping x to PDF values.
     """
     etd = get_etd()
     etd = etd[etd[:, 0] == pl_id][:, [1, 2]]  # Keep only x and pdf columns
-    # Create a dictionary mapping x to pdf
     x2pdf = dict(zip(etd[:, 0], etd[:, 1]))
-    return lambda x: x2pdf.get(x, 0)
+    return x2pdf
 
 
-def map_egress_x2cdf(pl_id: int) -> Callable:
+def map_egress_x2cdf(pl_id: int) -> dict[int, float]:
     """
     Get the CDF function for a given physical link id.
     :param pl_id: int
-    :return: Callable, takes one int value x and returns the corresponding CDF value.
-        If x is not in the range of the ETD data, returns None.
-        If x is in the range of the ETD data, returns the corresponding CDF value.
+    :return: Dictionary, mapping x to CDF values.
     """
     etd = get_etd()
     etd = etd[etd[:, 0] == pl_id][:, [1, 3]]  # Keep only x and cdf columns
     # Create a dictionary mapping x to cdf
     x2cdf = dict(zip(etd[:, 0], etd[:, 1]))
-    return lambda x: x2cdf.get(x, None)
+    return x2cdf
 
 
-def cal_pdf(x2pdf: Callable, walk_time: int | Iterable[int]) -> float | np.ndarray:
+def cal_pdf(x2pdf: dict, walk_time: int | Iterable[int]) -> float | np.ndarray:
     """
     Compute the probability density function (PDF) of walking time.
 
-    :param x2pdf: Callable
-        Function that maps a walking time to its corresponding PDF value.
-        It should take a single integer as input and return a float.
+    :param x2pdf: Dict[int, float], mapping x to PDF values.
+        For example, {0: 0.0001, 1: 0.0002, ..., 500: 0.0005}
 
     :param walk_time: int or Iterable[int]
         Actual walking time(s) to evaluate the PDF. Can be a scalar or a 1D array-like object.
@@ -755,20 +824,19 @@ def cal_pdf(x2pdf: Callable, walk_time: int | Iterable[int]) -> float | np.ndarr
     walk_time = np.atleast_1d(walk_time)
 
     # Use NumPy vectorized operations for efficiency
-    pdf_values = np.vectorize(x2pdf, otypes=[float])(walk_time)
+    pdf_values = np.vectorize(x2pdf.get, otypes=[float])(walk_time, 0)
 
     return pdf_values if pdf_values.size > 1 else pdf_values[0]
 
 
-def cal_cdf(x2cdf: Callable, t_start: int | Iterable[int], t_end: int | Iterable[int]) -> float | np.ndarray:
+def cal_cdf(x2cdf: dict, t_start: int | Iterable[int], t_end: int | Iterable[int]) -> float | np.ndarray:
     """
     Compute the cumulative distribution function (CDF) of walking time between t_start and t_end.
 
     Parameters
     ----------
-    x2cdf : Callable
-        Function that maps a walking time to its corresponding CDF value.
-        It should take a single integer as input and return a float.
+    x2cdf : Dict[int, float], mapping x to CDF values.
+        For example, {0: 0.0001, 1: 0.0003,..., 500: 1.0000}
 
     t_start : int or Iterable[int]
         Start time(s) of the interval. Can be a scalar or 1D array-like object.
@@ -790,8 +858,8 @@ def cal_cdf(x2cdf: Callable, t_start: int | Iterable[int], t_end: int | Iterable
     if t_start.shape != t_end.shape:
         raise ValueError("t_start and t_end must have the same shape.")
 
-    cdf_start = np.vectorize(x2cdf, otypes=[float])(t_start)
-    cdf_end = np.vectorize(x2cdf, otypes=[float])(t_end)
+    cdf_start = np.vectorize(x2cdf.get, otypes=[float])(t_start, None)
+    cdf_end = np.vectorize(x2cdf.get, otypes=[float])(t_end, None)
     if np.isnan(cdf_start).any():
         raise ValueError(
             "CDF_start values contain NaN. Please check the t_start ranges.")
@@ -800,47 +868,3 @@ def cal_cdf(x2cdf: Callable, t_start: int | Iterable[int], t_end: int | Iterable
             "CDF_end values contain NaN. Please check the t_end ranges.")
 
     return cdf_end - cdf_start if len(cdf_start) > 1 else cdf_end[0] - cdf_start[0]
-
-# def exist_swap(platform_id1: int, platform_id2: int, swaps: list[tuple[int, int]]) -> bool:
-#     """
-#     Check if there is a platform_swap link between two platforms.
-#     :param platform_id1: int
-#     :param platform_id2: int
-#     :param swaps: list of tuples (platform_id1, platform_id2)
-#     :return: bool
-#     """
-#     if (platform_id1, platform_id2) in swaps:
-#         return True
-#     return False
-
-# def get_swaps() -> list[tuple[int, int]]:
-#     """
-#     Get all platform swaps.
-#     :return: list of tuples (platform_id1, platform_id2)
-#     """
-#     platform = get_platform()
-#     swaps = []
-#     for p_grps in platform.values():
-#         for p_grp in p_grps:
-#             if len(p_grp) >= 2:
-#                 for a, b in combinations(p_grp, 2):
-#                     swaps.append((a, b))
-#                     swaps.append((b, a))
-#     return swaps
-
-
-# def get_transfer_cdf(platform_id1: int, platform_id2: int, t_start: int | Iterable[int],
-#                      t_end: int | Iterable[int]) -> float | np.ndarray[float]:
-#     """
-#     Get the CDF of transfer time between two platforms.
-#     :param platform_id1: int
-#     :param platform_id2: int
-#     :param t_start: int
-#     :param t_end: int
-#     :return: float
-#     """
-#     if exist_swap(platform_id1, platform_id2):
-#         return np.ones_like(t_start) * 1.0
-#
-#     pl_id1 = node_id_to_pl_id(platform_id1)
-#     pl_id2 = node_id_to_pl_id(platform_id2)

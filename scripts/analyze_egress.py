@@ -10,7 +10,7 @@ from src.walk_time_dis import filter_egress_time_from_left, filter_egress_time_f
 def _check_egress_time_outlier_rejects(uid: int = None):
     config.load_config()
     from src.utils import read_
-    from src.walk_time_dis import reject_outlier_bd, plot_egress_time_dis
+    from src.walk_time_dis import reject_outlier_bd, plot_walk_time_dis
 
     et_ = read_(fn="egress_times_1", show_timer=False, latest_=False)
 
@@ -36,16 +36,19 @@ def _check_egress_time_outlier_rejects(uid: int = None):
 
         print("Data size: ", et.shape[0], platform_ids)
 
-        plot_egress_time_dis(
-            egress_time=et['egress_time'].values, alight_ts=et['alight_ts'].values, title=f"All data {platform_ids}",
+        title = f" - Egress {uid}_{platform_ids}"
+
+        plot_walk_time_dis(
+            walk_time=et['egress_time'].values, alight_ts=et['alight_ts'].values, title=f"{title} (All data)",
             show_=True  # save if show_ is False
         )
 
         lb, ub = reject_outlier_bd(data=et['egress_time'].values, method="zscore", abs_max=None)
         et = et[(et['egress_time'] >= lb) & (et['egress_time'] <= ub)]
         print(f"Bounded by [{lb}, {ub}]: ", et.shape[0])
-        plot_egress_time_dis(
-            egress_time=et['egress_time'].values, alight_ts=et['alight_ts'].values, title=f"Bounded {platform_ids}",
+        plot_walk_time_dis(
+            walk_time=et['egress_time'].values, alight_ts=et['alight_ts'].values,
+            title=f"{title} (Rejected outliers)",
             show_=True  # save if show_ is False
         )
     return
@@ -80,7 +83,7 @@ def save_physical_links_info(et_: pd.DataFrame, save_on: bool = False) -> pd.Dat
 def read_physical_links_info(index: int = None) -> pd.DataFrame:
     """
     :param index:
-    :return: DataFrame with index: ["pl_id"] and columns: ["platform_id", "uid"].
+    :return: DataFrame with columns: ["pl_id", "platform_id", "uid"].
     """
     from src.utils import split_fn_index_ext
     full_fn = config.CONFIG["results"]["physical_links"]
@@ -125,11 +128,11 @@ def main(physical_links_index: int = None):
     # et_ = read_(fn="egress_times_1", show_timer=False, latest_=False)  # if already have egress_times_1.pkl
 
     if physical_links_index is None:
-        df_pl = save_physical_links_info(et_=et_, save_on=True)
+        df_pl = save_physical_links_info(et_=et_, save_on=True).reset_index()
     else:  # if already have physical_links_1.csv
         df_pl = read_physical_links_info(index=physical_links_index)
 
-    plot_egress_time_dis_all(save_subfolder="ETD0", et_=et_, physical_link_info=df_pl.reset_index().values,
+    plot_egress_time_dis_all(et_=et_, physical_link_info=df_pl.values, save_subfolder="ETD0",
                              save_on=True)
     save_etd(et_=et_, save_on=True)
     pass
