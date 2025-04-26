@@ -150,85 +150,85 @@ def filter_transfer_time_from_assigned() -> pd.DataFrame:
     return res
 
 
-def get_transfer_platform_ids_from_path() -> np.ndarray:
-    """
-
-    :return: Array with 5 columns:
-        ["path_id", "seg_id", "node1", "node2", "transfer_type"]
-        where seg_id is the alighting train segment id, the transfer time is thus considered as the time difference
-        between the alighting time of seg_id and the boarding time of seg_id + 1.
-        where transfer_type is one of "platform_swap", "egress-entry".
-    """
-    # add seg_id in k_pv
-    k_pv_ = get_k_pv()[:, :-2]
-    df = pd.DataFrame(k_pv_, columns=["path_id", "pv_id", "node1", "node2", "link_type"])
-    in_vehicle_df = df[df['link_type'] == 'in_vehicle'].copy()
-    in_vehicle_df['seg_id'] = in_vehicle_df.groupby('path_id').cumcount() + 1
-    df = pd.merge(df, in_vehicle_df[['seg_id']], left_index=True, right_index=True, how='left')
-
-    # delete non-transfer paths
-    path = read_("path", show_timer=False)
-    path_id_with_transfer = path[path["transfer_cnt"] > 0]["path_id"].values
-    df = df[df['path_id'].isin(path_id_with_transfer)]
-
-    # delete first and last pathvia row
-    first_pv_ind = (df["pv_id"] == 1)  # entry
-    last_pv_ind = first_pv_ind.shift(-1)  # egress
-    df = df[~(first_pv_ind | last_pv_ind)].iloc[:-1, :]
-
-    # aggregate egress-entry transfer link
-    df["seg_id"] = df["seg_id"].ffill().astype(int)
-    df["next_node2"] = df["node2"].shift(-1)
-    # fix swap expressions
-    df.loc[df["link_type"] == "platform_swap", "next_node2"] = df["node2"]
-    df.loc[df["link_type"] == "egress", "link_type"] = "egress-entry"  # rename for clarity
-    res = df[df["link_type"].isin(["egress-entry", "platform_swap"])][
-        ["path_id", "seg_id", "node1", "next_node2", "link_type"]].values
-    return res
-
-
-def map_platform_id_to_platform_uid() -> dict:
-    """
-    Get a dictionary mapping platform node_ids to platform_uids.
-
-    Platform_uid is the unique identifier of a platform, which can be either nid or smallest
-        platform_id on the same physical platform.
-
-    The mapping is based on the platform information and exceptions. (Including Sihe Detour (Huafu Avenue) exception)
-
-    :return: A dictionary with platform node_ids as keys and platform UIDs as values.
-    """
-    # get platform_id -> nid dict
-    node_info = read_(config.CONFIG["results"]["node"], show_timer=False)
-    node_info = node_info[node_info["LINE_NID"].notna() & (node_info["IS_TRANSFER"] == 1)]
-    p_id2p_uid = {int(k): int(v) for k, v in node_info["STATION_NID"].to_dict().items()}
-
-    # Add Sihe detour (Huafu Avenue) exception: transfer might happens at 10140 with swap
-    p_id2p_uid.update({101400: 10140, 101401: 10140, })
-
-    # process platform exceptions
-    platform_exceptions = {}  # platform_id -> the smallest platform_id (same physical platform)
-    for pl_grps in get_platform().values():
-        for pl_grp in pl_grps:
-            for platform_id in pl_grp:
-                platform_exceptions[platform_id] = min(pl_grp)
-    # update platform exceptions
-    p_id2p_uid.update(platform_exceptions)
-
-    return p_id2p_uid
-
-
 def map_path_seg_to_transfer_link() -> pd.DataFrame:
     """
-    Map path segments to transfer links.
+    Map (path_id, seg_id) to (p_uid_min, p_uid_max, transfer_type).
 
     :return: A DataFrame with 7 columns:
         ["path_id", "seg_id", "node1", "node2", "p_uid_min", "p_uid_max", "transfer_type"]
         where seg_id is the alighting train segment id, transfer_type is one of "platform_swap", "egress-entry",
         and p_uid_min, p_uid_max are the platform_uids of the two platforms involved in the transfer.
     """
-    path2trans = get_transfer_platform_ids_from_path()  # path_id, seg_id, node1, node2, transfer_type
-    df_p2t = pd.DataFrame(path2trans, columns=["path_id", "seg_id", "node1", "node2", "transfer_type"])
+
+    def get_transfer_platform_ids_from_path_seg() -> pd.DataFrame:
+        """
+        A helper function to get (path_id, seg_id) pair -> (node1, node2, transfer_type)
+        :return: DataFrame with 5 columns:
+            ["path_id", "seg_id", "node1", "node2", "transfer_type"]
+            where seg_id is the alighting train segment id, the transfer time is thus considered as the time difference
+            between the alighting time of seg_id and the boarding time of seg_id + 1.
+            where transfer_type is one of "platform_swap", "egress-entry".
+        """
+        # add seg_id in k_pv
+        k_pv_ = get_k_pv()[:, :-2]
+        df = pd.DataFrame(k_pv_, columns=["path_id", "pv_id", "node1", "node2", "link_type"])
+        in_vehicle_df = df[df['link_type'] == 'in_vehicle'].copy()
+        in_vehicle_df['seg_id'] = in_vehicle_df.groupby('path_id').cumcount() + 1
+        df = pd.merge(df, in_vehicle_df[['seg_id']], left_index=True, right_index=True, how='left')
+
+        # delete non-transfer paths
+        path = read_("path", show_timer=False)
+        path_id_with_transfer = path[path["transfer_cnt"] > 0]["path_id"].values
+        df = df[df['path_id'].isin(path_id_with_transfer)]
+
+        # delete first and last pathvia row
+        first_pv_ind = (df["pv_id"] == 1)  # entry
+        last_pv_ind = first_pv_ind.shift(-1)  # egress
+        df = df[~(first_pv_ind | last_pv_ind)].iloc[:-1, :]
+
+        # aggregate egress-entry transfer link
+        df["seg_id"] = df["seg_id"].ffill().astype(int)
+        df["next_node2"] = df["node2"].shift(-1)
+        # fix swap expressions
+        df.loc[df["link_type"] == "platform_swap", "next_node2"] = df["node2"]
+        df.loc[df["link_type"] == "egress", "link_type"] = "egress-entry"  # rename for clarity
+        res = df[df["link_type"].isin(["egress-entry", "platform_swap"])][
+            ["path_id", "seg_id", "node1", "next_node2", "link_type"]].rename(
+            columns={"next_node2": "node2", "link_type": "transfer_type"}
+        )
+        return res
+
+    def map_platform_id_to_platform_uid() -> dict[int, int]:
+        """
+        Helper function to get a dictionary mapping platform_ids to platform_uids.
+
+        Platform_uid is the unique identifier of a platform, which can be either nid or the
+            smallest platform_id on the same physical platform.
+
+        The mapping included Sihe Detour (Huafu Avenue) exception.
+
+        :return: A dictionary with platform_ids as keys and platform_uids as values.
+        """
+        # get platform_id -> nid dict
+        node_info = read_(config.CONFIG["results"]["node"], show_timer=False)
+        node_info = node_info[node_info["LINE_NID"].notna() & (node_info["IS_TRANSFER"] == 1)]
+        p_id2p_uid = {int(k): int(v) for k, v in node_info["STATION_NID"].to_dict().items()}
+
+        # Add Sihe detour (Huafu Avenue) exception: transfer might happens at 10140 with swap
+        p_id2p_uid.update({101400: 10140, 101401: 10140, })
+
+        # process platform exceptions
+        platform_exceptions = {}  # platform_id -> the smallest platform_id (same physical platform)
+        for pl_grps in get_platform().values():
+            for pl_grp in pl_grps:
+                for platform_id in pl_grp:
+                    platform_exceptions[platform_id] = min(pl_grp)
+        # update platform exceptions
+        p_id2p_uid.update(platform_exceptions)
+
+        return p_id2p_uid
+
+    df_p2t = get_transfer_platform_ids_from_path_seg()  # path_id, seg_id, node1, node2, transfer_type
 
     p_id2p_uid = map_platform_id_to_platform_uid()
 
@@ -774,6 +774,17 @@ def fit_transfer_time_dis_all(df_tt: pd.DataFrame, map_p2t: pd.DataFrame) -> pd.
     for col in ["p_uid1", "p_uid2", "x"]:
         res[col] = res[col].astype(int)
     return res
+
+
+# todo 思路
+"""
+因为(assigned的columns是：rid, iti_id, path_id, seg_id, train_id, board_ts, alight_ts.)
+从使用(cal_iti_prob)的角度应该是：
+
+EGRESS: (path_id) -> platform_id (last seg alighting platform) -> x2pdf dict
+ENTRY: (path_id) -> platform_id (first seg boarding platform) -> x2cdf dict
+TRANSFER: (path_id, seg_id) (alighting seg_id) -> (p_uid_min, p_uid_max) -> x2cdf dict
+"""
 
 
 def map_egress_x2pdf(pl_id: int) -> dict[int, float]:
