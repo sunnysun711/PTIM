@@ -28,7 +28,7 @@ def save_transfer_links_info(save_on: bool = False) -> pd.DataFrame:
         where seg_id is the alighting train segment id, transfer_type is one of "platform_swap", "egress-entry",
         and p_uid_min, p_uid_max are the platform_uids of the two platforms involved in the transfer.
     """
-    df = map_path_seg_to_transfer_link()
+    df = generate_transfer_info_df_from_path_seg()
     if save_on:
         save_(fn=config.CONFIG["results"]["transfer_links"], data=df.set_index("path_id"), auto_index_on=True)
     return df
@@ -47,32 +47,32 @@ def read_transfer_links_info(index: int = None) -> pd.DataFrame:
     return read_(fn=f"{fn}_{index}{ext}", show_timer=True)
 
 
-def save_ttd(df_tt, map_p2t, save_on: bool = False) -> pd.DataFrame:
+def save_ttd(df_tt, df_ps2t, save_on: bool = False) -> pd.DataFrame:
     """
     Save the transfer time distribution to a CSV file.
     :return: A DataFrame with 6 columns:
         [p_uid1, p_uid2, x, kde_cdf, gamma_cdf, lognorm_cdf]
         where p_uid1, p_uid2 are smaller and larger platform_uid of the transfer link.
     """
-    df = fit_transfer_time_dis_all(df_tt=df_tt, map_p2t=map_p2t)
+    df = fit_transfer_time_dis_all(df_tt=df_tt, df_ps2t=df_ps2t)
     if save_on:
         save_(fn=config.CONFIG["results"]["ttd"], data=df, auto_index_on=True)
     return df
 
 
-def plot_ttd(df_tt, map_p2t):
+def plot_ttd(df_tt, df_ps2t):
     """
     Plot the transfer time distribution.
     :param df_tt: DataFrame with 4 columns:
         ["path_id", "seg_id", "alight_ts", "transfer_time"]
         where seg_id is the alighting train segment id, the transfer time is thus considered as the time difference
         between the alighting time of seg_id and the boarding time of seg_id + 1.
-    :param map_p2t: A DataFrame with 7 columns:
+    :param df_ps2t: A DataFrame with 7 columns:
         ["path_id", "seg_id", "node1", "node2", "p_uid_min", "p_uid_max", "transfer_type"]
         where seg_id is the alighting train segment id, transfer_type is one of "platform_swap", "egress-entry",
         and p_uid_min, p_uid_max are the platform_uids of the two platforms involved in the transfer.
     """
-    plot_transfer_time_dis_all(df_tt=df_tt, map_p2t=map_p2t, save_subfolder="TTD0", save_on=True)
+    plot_transfer_time_dis_all(df_tt=df_tt, df_ps2t=df_ps2t, save_subfolder="TTD0", save_on=True)
     pass
 
 
@@ -99,10 +99,10 @@ def main(use_transfer_links_index: int = None):
     print(info_message)
 
     df_tt = save_transfer_times(save_on=True)
-    map_p2t = save_transfer_links_info(save_on=True) if use_transfer_links_index is None else \
+    df_ps2t = save_transfer_links_info(save_on=True) if use_transfer_links_index is None else \
         read_transfer_links_info(index=use_transfer_links_index)
-    plot_ttd(df_tt, map_p2t)
-    save_ttd(df_tt, map_p2t, save_on=True)
+    plot_ttd(df_tt, df_ps2t)
+    save_ttd(df_tt, df_ps2t, save_on=True)
     ...
 
 

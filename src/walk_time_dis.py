@@ -18,7 +18,7 @@ Import and call the following functions as needed:
 """
 from src import config
 from src.utils import read_, read_all, ts2tstr
-from src.globals import get_afc, get_k_pv, get_pl_info, get_etd, get_link_info, get_platform
+from src.globals import get_afc, get_k_pv, get_pl_info, get_etd, get_link_info, get_platform, get_ttd
 from tqdm import tqdm
 from scipy.stats import kstest
 from joblib import Parallel, delayed
@@ -150,14 +150,23 @@ def filter_transfer_time_from_assigned() -> pd.DataFrame:
     return res
 
 
-def map_path_seg_to_transfer_link() -> pd.DataFrame:
+def generate_transfer_info_df_from_path_seg() -> pd.DataFrame:
     """
-    Map (path_id, seg_id) to (p_uid_min, p_uid_max, transfer_type).
+    Generate a DataFrame containing transfer information from path segment data.
 
-    :return: A DataFrame with 7 columns:
-        ["path_id", "seg_id", "node1", "node2", "p_uid_min", "p_uid_max", "transfer_type"]
-        where seg_id is the alighting train segment id, transfer_type is one of "platform_swap", "egress-entry",
-        and p_uid_min, p_uid_max are the platform_uids of the two platforms involved in the transfer.
+    This method maps pairs of (path_id, seg_id) to information about (p_uid_min, p_uid_max, transfer_type).
+    Here, seg_id represents the ID of the alighting train segment, transfer_type can be either "platform_swap"
+    or "egress - entry", and p_uid_min and p_uid_max are the unique identifiers of the two platforms involved
+    in the transfer.
+
+    Specific steps include:
+    1. Obtain the node_ids of transfer platforms from (path_id, seg_id) data.
+    2. Establish a mapping from platform node_ids to unique platform identifiers.
+    3. Convert platform_ids to unique platform identifiers and calculate the minimum and maximum unique platform
+        identifiers for each transfer.
+
+    :return: DataFrame with 7 columns:
+            ["path_id", "seg_id", "node1", "node2", "p_uid_min", "p_uid_max", "transfer_type"].
     """
 
     def get_transfer_platform_ids_from_path_seg() -> pd.DataFrame:
@@ -202,10 +211,10 @@ def map_path_seg_to_transfer_link() -> pd.DataFrame:
         """
         Helper function to get a dictionary mapping platform_ids to platform_uids.
 
-        Platform_uid is the unique identifier of a platform, which can be either nid or the
+        Platform_uid is the unique identifier of a platform, which can be either station_nid or the
             smallest platform_id on the same physical platform.
 
-        The mapping included Sihe Detour (Huafu Avenue) exception.
+        This mapping includes exceptions for the Sihe Detour (Huafu Avenue).
 
         :return: A dictionary with platform_ids as keys and platform_uids as values.
         """
@@ -523,7 +532,7 @@ def plot_egress_time_dis_all(
 
 def plot_transfer_time_dis_all(
         df_tt: pd.DataFrame,
-        map_p2t: pd.DataFrame,
+        df_ps2t: pd.DataFrame,
         save_subfolder: str = "",
         save_on: bool = True,
 ):
@@ -537,7 +546,7 @@ def plot_transfer_time_dis_all(
     ------
     :param df_tt: Optional DataFrame containing transfer time data.
 
-    :param map_p2t: Optional DataFrame mapping physical links to transfer links.
+    :param df_ps2t: Optional DataFrame mapping path seg info to transfer info.
 
     :param save_subfolder: The subfolder where plots will be saved.
         If not specified, plots are saved in the default figure folder.
@@ -548,7 +557,7 @@ def plot_transfer_time_dis_all(
         os.makedirs(saving_dir)
 
     print("[INFO] Plotting TTD...")
-    df = pd.merge(df_tt, map_p2t, on=["path_id", "seg_id"], how="left")
+    df = pd.merge(df_tt, df_ps2t, on=["path_id", "seg_id"], how="left")
 
     # egress-entry transfers
     for (p_uid1, p_uid2), df_ in df[df["transfer_type"] == "egress-entry"].groupby(
@@ -716,7 +725,7 @@ def fit_egress_time_dis_all_parallel(
     ])
 
 
-def fit_transfer_time_dis_all(df_tt: pd.DataFrame, map_p2t: pd.DataFrame) -> pd.DataFrame:
+def fit_transfer_time_dis_all(df_tt: pd.DataFrame, df_ps2t: pd.DataFrame) -> pd.DataFrame:
     """
     Fit the distribution of transfer time for all transfer links.
 
@@ -724,7 +733,7 @@ def fit_transfer_time_dis_all(df_tt: pd.DataFrame, map_p2t: pd.DataFrame) -> pd.
         ["path_id", "seg_id", "alight_ts", "transfer_time"]
         where seg_id is the alighting train segment id, transfer_time is the time difference between the alighting
         time of seg_id and the boarding time of seg_id + 1.
-    :param map_p2t: DataFrame with 7 columns:
+    :param df_ps2t: Generated transfer info mapping from path seg, DataFrame with 7 columns:
         ["path_id", "seg_id", "node1", "node2", "p_uid_min", "p_uid_max", "transfer_type"]
         where seg_id is the alighting train segment id, transfer_type is one of "platform_swap", "egress-entry",
         and p_uid_min, p_uid_max are the platform_uids of the two platforms involved in the transfer.
@@ -736,7 +745,7 @@ def fit_transfer_time_dis_all(df_tt: pd.DataFrame, map_p2t: pd.DataFrame) -> pd.
     """
     print("[INFO] Start fitting transfer time distribution...")
     # merge df_tt and df_p2t to get (p_uid_min, p_uid_max) -> transfer_time info
-    df = pd.merge(df_tt, map_p2t, on=["path_id", "seg_id"], how="left")
+    df = pd.merge(df_tt, df_ps2t, on=["path_id", "seg_id"], how="left")
 
     x = np.linspace(0, 500, 501)
     res = []
@@ -781,39 +790,97 @@ def fit_transfer_time_dis_all(df_tt: pd.DataFrame, map_p2t: pd.DataFrame) -> pd.
 因为(assigned的columns是：rid, iti_id, path_id, seg_id, train_id, board_ts, alight_ts.)
 从使用(cal_iti_prob)的角度应该是：
 
-EGRESS: (path_id) -> platform_id (last seg alighting platform) -> x2pdf dict
-ENTRY: (path_id) -> platform_id (first seg boarding platform) -> x2cdf dict
+EGRESS: (path_id) -> platform_id (last seg alighting platform) -> pl_id -> x2pdf dict
+           map_path_id_to_platform(egress=True, entry=False)  
+           map_platform_id_to_pl_id()  
+           map_pl_id_to_x2pdf_cdf(pdf=True, cdf=False)
+ENTRY: (path_id) -> platform_id (first seg boarding platform) -> pl_id -> x2cdf dict
+           map_path_id_to_platform(entry=True, egress=False)   
+           map_platform_id_to_pl_id()  
+           map_pl_id_to_x2pdf_cdf(pdf=False, cdf=True)
 TRANSFER: (path_id, seg_id) (alighting seg_id) -> (p_uid_min, p_uid_max) -> x2cdf dict
 """
 
 
-def map_egress_x2pdf(pl_id: int) -> dict[int, float]:
+def map_path_id_to_platform(egress: bool, entry: bool) -> dict[int, int]:
     """
-    Get the PDF values for a given physical link id.
-
-    :param pl_id: int
-    :return: Dictionary, mapping x to PDF values.
+    Get the egress/entry platform id for a given path id.
+    :param egress: bool
+        If True, return {path_id -> egress platform id}.
+    :param entry: bool
+        If True, return {path_id -> entry platform id}.
+    :return: dict, mapping path_id to platform_id.
     """
-    etd = get_etd()
-    etd = etd[etd[:, 0] == pl_id][:, [1, 2]]  # Keep only x and pdf columns
-    x2pdf = dict(zip(etd[:, 0], etd[:, 1]))
-    return x2pdf
+    pv = get_k_pv()
+    first_pv_index = np.where(pv[:, 1] == 1)[0]  # first row index of each path_id
+
+    if entry and not egress:
+        pv = pv[first_pv_index]
+        return {i: j for i, j in pv[:, [0, 3]]}
+
+    if egress:
+        pv = pv[first_pv_index - 1]
+        return {i: j for i, j in pv[:, [0, 2]]}
+
+    raise Exception("Please specify either egress or entry!")
 
 
-def map_egress_x2cdf(pl_id: int) -> dict[int, float]:
+def map_platform_id_to_pl_id() -> dict[int, int]:
     """
-    Get the CDF function for a given physical link id.
-    :param pl_id: int
-    :return: Dictionary, mapping x to CDF values.
+    Convert node_id to physical link id.
+    :return: Dictionary mapping platform node_id to physical link id.
     """
-    etd = get_etd()
-    etd = etd[etd[:, 0] == pl_id][:, [1, 3]]  # Keep only x and cdf columns
-    # Create a dictionary mapping x to cdf
-    x2cdf = dict(zip(etd[:, 0], etd[:, 1]))
-    return x2cdf
+    pl_info = get_pl_info()
+    res = {i: j for i, j in pl_info[:, [1, 0]]}
+    return res
 
 
-def cal_pdf(x2pdf: dict, walk_time: int | Iterable[int]) -> float | np.ndarray:
+def map_path_seg_to_platforms() -> dict[(int, int), (int, int)]:
+    """
+    Get the transfer platform ids for a given path id.
+    :return: dict, mapping (path_id, seg_id) to (platform_uid_min, platform_uid_max).
+    """
+    df_ps2t = generate_transfer_info_df_from_path_seg()  # path_id, seg_id, node1, node2, p_uid_min, p_uid_max, transfer_type
+    data = df_ps2t[["path_id", "seg_id", "p_uid_min", "p_uid_max"]].values
+    res = {(p, s): (mi, ma) for p, s, mi, ma in data}
+    return res
+
+
+def map_pl_id_to_x2pdf_cdf(pdf:bool, cdf:bool) -> dict[int, dict[int, float]]:
+    """
+    Get the PDF / CDF values dictionaries.
+    :param pdf: bool
+        If True, return {pl_id -> {x -> PDF values}}.
+    :param cdf: bool
+        If True, return {pl_id -> {x -> CDF values}}.
+    :return: dict, mapping pl_id to a dict mapping x to PDF / CDF values.
+    """
+    etd = get_etd()  # pl_id, x, pdf, cdf
+    res = {}
+    for pl_id in np.unique(etd[:, 0]):
+        if pdf and not cdf:
+            x2f = {i: j for i, j in etd[etd[:, 0] == pl_id][:, [1, 2]]}
+        elif cdf:
+            x2f = {i: j for i, j in etd[etd[:, 0] == pl_id][:, [1, 3]]}
+        else:
+            raise Exception("Please specify either pdf or cdf!")
+        res[pl_id] = x2f
+    return res
+
+def map_transfer_link_to_x2cdf() -> dict[tuple[int, int], dict[int, float]]:
+    """
+    Get the CDF values dictionaries.
+    :return: dict, mapping (p_uid_min, p_uid_max) to a dict mapping x to CDF values.
+    """
+    ttd = get_ttd()  # p_uid_min, p_uid_max, x, cdf
+    res = {}
+    for p_uid_min, p_uid_max in np.unique(ttd[:, [0, 1]], axis=0):
+        x2f = {i: j for i, j in ttd[(ttd[:, 0] == p_uid_min) & (ttd[:, 1] == p_uid_max)][:, [2, 3]]}
+        res[(p_uid_min, p_uid_max)] = x2f
+    return res
+
+
+def cal_pdf(x2pdf: dict[int, float], walk_time: int | Iterable[int]) -> float | np.ndarray:
     """
     Compute the probability density function (PDF) of walking time.
 
@@ -840,7 +907,7 @@ def cal_pdf(x2pdf: dict, walk_time: int | Iterable[int]) -> float | np.ndarray:
     return pdf_values if pdf_values.size > 1 else pdf_values[0]
 
 
-def cal_cdf(x2cdf: dict, t_start: int | Iterable[int], t_end: int | Iterable[int]) -> float | np.ndarray:
+def cal_cdf(x2cdf: dict[int, float], t_start: int | Iterable[int], t_end: int | Iterable[int]) -> float | np.ndarray:
     """
     Compute the cumulative distribution function (CDF) of walking time between t_start and t_end.
 

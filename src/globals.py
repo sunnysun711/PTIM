@@ -37,6 +37,7 @@ TT: np.ndarray | None = None
 AFC: np.ndarray | None = None
 PL_INFO: np.ndarray | None = None
 ETD: np.ndarray | None = None
+TTD: np.ndarray | None = None
 LINK_INFO: np.ndarray | None = None
 PLATFORM: dict | None = None
 
@@ -194,11 +195,32 @@ def get_etd() -> np.ndarray:
             # f"{config.CONFIG['parameters']['distribution_type']}_ks_stat",
             # f"{config.CONFIG['parameters']['distribution_type']}_ks_p_value"
         ]]
-        ETD.columns = [
-            "pl_id", "x", "pdf", "cdf",
-            # "ks_stat", "ks_p_value"
-        ]
+        # ETD.columns = [
+        #     "pl_id", "x", "pdf", "cdf",
+        #     # "ks_stat", "ks_p_value"
+        # ]
     return ETD.values
+
+
+def get_ttd() -> np.ndarray:
+    """
+
+    :return: Array of shape (n, 4) with columns:
+        ['p_uid1', 'p_uid2', 'x', 'cdf']
+        where `p_uid1` and `p_uid2` are the min and max platform_uids of the two platforms involved in the transfer,
+        `x` is the transfer time index (0-500), and `cdf` is the cumulative distribution function.
+        Note that for platform_swap transfers, x only has one value as zero.
+    """
+    global TTD
+    if TTD is None:
+        TTD = read_(config.CONFIG["results"]["ttd"],
+                    show_timer=False, latest_=True)
+        TTD = TTD[[
+            "p_uid1", "p_uid2", "x",
+            f"{config.CONFIG['parameters']['distribution_type']}_cdf",
+            # "kde_cdf", "gamma_cdf", "lognorm_cdf"
+        ]].values
+    return TTD
 
 
 def get_link_info() -> np.ndarray:
