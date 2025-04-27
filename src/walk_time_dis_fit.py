@@ -1,19 +1,3 @@
-"""
-This module contains functions for fitting statistical distributions to walking time data,
-evaluating the goodness of fit, and applying the fitted models to make probabilistic
-calculations about walking times.
-
-Functions:
-- `fit_pdf_cdf()`: Fit a probability density function (PDF) and cumulative distribution
-  function (CDF) to the input data using methods like Kernel Density Estimation (KDE),
-  Gamma distribution, or Log-Normal distribution.
-- `evaluate_fit()`: Evaluate the fit of a cumulative distribution function (CDF) to the input data
-  using the Kolmogorov-Smirnov (K-S) test.
-- `fit_one_pl()`: Fit the distribution of egress time for a specific physical link.
-- `fit_egress_time_dis_all_parallel()`: Fit the distribution of egress time for all physical links in parallel.
-- `fit_transfer_time_dis_all()`: Fit the distribution of transfer time for all transfer links.
-"""
-
 from typing import Callable
 import numpy as np
 import pandas as pd

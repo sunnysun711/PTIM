@@ -34,7 +34,7 @@ def get_egress_from_left() -> pd.DataFrame:
         last_seg_all_iti["rid"].isin(same_train_rids)
     ].groupby("rid").last().drop(columns=["iti_id", "board_ts"])
 
-    return calculate_egress_time(last_seg)
+    return _calculate_egress_time(last_seg)
 
 
 def get_egress_from_assigned() -> pd.DataFrame:
@@ -55,10 +55,10 @@ def get_egress_from_assigned() -> pd.DataFrame:
     # 772934 rows for assigned_1.pkl file
     last_seg = df.groupby("rid").last().drop(columns=["iti_id", "board_ts"])
 
-    return calculate_egress_time(last_seg)
+    return _calculate_egress_time(last_seg)
 
 
-def calculate_egress_time(df_last_seg: pd.DataFrame) -> pd.DataFrame:
+def _calculate_egress_time(df_last_seg: pd.DataFrame) -> pd.DataFrame:
     """
     A helper function designed to calculate the egress time for a specified set of passenger IDs (rids).
     It enriches the input DataFrame with necessary columns and computes the egress time for each passenger.
@@ -194,7 +194,7 @@ def filter_transfer_all():
     Find transfer times from assigned_*.pkl files, map them with physical_platform_id.
         
     :return: DataFrame with columns:
-        ["rid" (index), "path_id", "seg_id", "pp_id1", "pp_id2", "transfer_time"]
+        ["rid" (index), "path_id", "seg_id", "pp_id1", "pp_id2", "alight_ts", "transfer_time", "transfer_type"]
         where pp_id1 and pp_id2 are the IDs of the physical platforms,
         and transfer_time is the time difference between alight_ts and board_ts.
     """
@@ -202,7 +202,7 @@ def filter_transfer_all():
     df_mapper = get_path_seg_to_pp_ids()  # [path_id, seg_id, pp_id1, pp_id2, transfer_type]
     df = df_tt.merge(df_mapper, on=["path_id", "seg_id"], how="left")  # [rid, path_id, seg_id, alight_ts, transfer_time, pp_id1, pp_id2, transfer_type]
     assert df[df["pp_id1"].isna() | df["pp_id2"].isna()].shape[0] == 0, "Transfer pp_id not found!"
-    df = df[["rid", "path_id", "seg_id", "pp_id1", "pp_id2", "transfer_time", "transfer_type"]].set_index("rid")
+    df = df[["rid", "path_id", "seg_id", "pp_id1", "pp_id2", "alight_ts", "transfer_time", "transfer_type"]].set_index("rid")
     df["transfer_time"] = df["transfer_time"].astype(int)
     df["transfer_type"] = df["transfer_type"].astype("category")
     return df

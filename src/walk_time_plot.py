@@ -22,6 +22,8 @@ import pandas as pd
 import matplotlib
 import seaborn as sns
 
+from src.globals import get_platform
+
 matplotlib.use("Agg")  # Use non-interactive backend for saving figures
 # matplotlib.use("TkAgg")  # Use TkAgg backend for interactive plotting
 
@@ -130,6 +132,27 @@ def plot_walk_time_dis(
         return None
     else:
         return fig
+
+
+def _plot_egress_time_dis_all(
+        eg_t: pd.DataFrame,
+        save_subfolder: str = "",
+        save_on: bool = True,
+):
+    """"""
+    platforms = get_platform()  # pp_id, node_id, uid
+
+    saving_dir = config.CONFIG["figure_folder"] + "/" + save_subfolder
+    if save_subfolder and not os.path.exists(saving_dir):
+        os.makedirs(saving_dir)
+    
+    print(f"[INFO] Plotting ETD...")
+    for uid in range(1001, 1137):
+        _pl_info = platforms[platforms[:, 2] == uid]
+        for pl_id in np.unique(_pl_info[:, 0]):
+            plat_ids = _pl_info[_pl_info[:, 0] == pl_id][:, 1]
+            
+
 
 
 def plot_egress_time_dis_all(
