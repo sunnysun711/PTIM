@@ -9,16 +9,15 @@ data:
 results_folder: "results"
 results_subfolder:
   network: "network"
-  path: "path"
   itinerary: "itinerary"
   trajectory: "trajectory"
   egress: "egress"
   transfer: "transfer"
 results:
   # network:
-  node: "node_info.pkl"
-  link: "link_info.pkl"
-  # path:
+  node: "node.csv"  # [node_id, STATION_NID, STATION_UID, IS_TRANSFER, IS_TERMINAL, LINE_NID]
+  link: "link.csv"  # [node_id1, node_id2, link_type, link_weight]
+  platform: "platform.csv"  # columns: [`uid`, `platform_id`, `node_id`]  example: [1010, 101001, 107291], [1010, 101001, 107290], [1010, 101002, 104370], [1010, 101002, 104371]
   path: "path.pkl"
   pathvia: "pathvia.pkl"
   # itinerary:
@@ -30,19 +29,16 @@ results:
   stashed: "stashed.pkl"
   # egress:
   egress_times: "egress_times.pkl"  # auto index
-  etd: "etd.pkl"  # columns: [pl_id, x, kde_pdf, kde_cdf, kde_ks_stat, kde_ks_p_value, gamma_pdf, gamma_cdf, gamma_ks_stat, gamma_ks_p_value, lognorm_pdf, lognorm_cdf, lognorm_ks_stat, lognorm_ks_p_value]
-  physical_links: "physical_links.csv"  # columns: [`pl_id`, `platform_id`, `uid`]
+  etd: "etd.csv"  # columns: [pl_id, x, kde_pdf, kde_cdf, kde_ks_stat, kde_ks_p_value, gamma_pdf, gamma_cdf, gamma_ks_stat, gamma_ks_p_value, lognorm_pdf, lognorm_cdf, lognorm_ks_stat, lognorm_ks_p_value]
   # transfer:
   transfer_times: "transfer_times.pkl"  # auto index
-  ttd: "ttd.pkl"  # columns: [plat_uid1, plat_uid2, kde_pdf, kde_cdf, kde_ks_stat, kde_ks_p_value]
-  transfer_links: "transfer_links.csv"  # columns: [`path_id`, `seg_id`, `node1`, `node2`, `p_uid1`, `p_uid2`, `transfer_type`]
+  ttd: "ttd.csv"  # columns: [plat_uid1, plat_uid2, kde_pdf, kde_cdf, kde_ks_stat, kde_ks_p_value]
 
 
 figure_folder: "figures"
 
 use_existing:
   network: true
-  path: true
   itinerary: true
   trajectory: true
 

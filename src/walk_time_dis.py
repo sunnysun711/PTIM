@@ -34,7 +34,7 @@ from itertools import combinations
 
 from src import config
 from src.utils import read_, read_all, ts2tstr
-from src.globals import get_afc, get_k_pv, get_pl_info, get_etd, get_platform, get_ttd
+from src.globals import get_afc, get_k_pv, get_etd, get_platform_exceptions, get_ttd
 
 
 def filter_egress_time_from_left() -> pd.DataFrame:
@@ -230,7 +230,7 @@ def generate_transfer_info_df_from_path_seg() -> pd.DataFrame:
 
         # process platform exceptions
         platform_exceptions = {}  # platform_id -> the smallest platform_id (same physical platform)
-        for pl_grps in get_platform().values():
+        for pl_grps in get_platform_exceptions().values():
             for pl_grp in pl_grps:
                 for platform_id in pl_grp:
                     platform_exceptions[platform_id] = min(pl_grp)

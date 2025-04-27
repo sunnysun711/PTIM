@@ -11,10 +11,10 @@ def main(config_file):
     # Running the various modules
     if not config.CONFIG["use_existing"]["network"]:
         from scripts import prep_network
-        prep_network.main(read_network=False)
+        prep_network.main()
     elif not config.CONFIG["use_existing"]["path"]:
         from scripts import prep_network
-        prep_network.main(read_network=True)
+        prep_network.main()
 
     if not config.CONFIG["use_existing"]["itinerary"]:
         from scripts import find_feas_iti

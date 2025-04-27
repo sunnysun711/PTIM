@@ -16,7 +16,7 @@ import pandas as pd
 
 from src import config
 from src.utils import execution_timer, read_, save_
-from src.metro_net import gen_links, gen_node_from_sta, ChengduMetro, nx
+from src.metro_net import gen_links, gen_node_from_sta, ChengduMetro, gen_platforms, nx
 
 
 def _test_k_paths():
@@ -52,6 +52,14 @@ def get_node_and_link(read_on: bool) -> tuple[pd.DataFrame, pd.DataFrame]:
     return node, link
 
 
+def get_platforms(save_on: bool) -> pd.DataFrame:
+    """Get platforms from the network."""
+    df_plat = gen_platforms()
+    if save_on:
+        save_(config.CONFIG["results"]["platform"], df_plat, auto_index_on=False)
+    return df_plat
+
+
 @execution_timer
 def gen_path(nodes: pd.DataFrame, links: pd.DataFrame):
     # generate k-paths files
@@ -67,40 +75,26 @@ def gen_path(nodes: pd.DataFrame, links: pd.DataFrame):
     return
 
 
-def main(read_network: bool):
+def main():
     print("\033[33m"
           "======================================================================================\n"
           "[INFO] This script prepares the metro network structure for pathfinding.\n"
-          "       It generates nodes, links, k-shortest paths, and their segment breakdowns.\n"
+          "       It generates nodes, links, platforms, k-shortest paths, and their segment breakdowns.\n"
           "       Key Outputs:\n"
-          "       - node_info.pkl: Metro station and platform node information\n"
-          "       - link_info.pkl: Travel and walking links between nodes\n"
-          "       - path.pkl: K-shortest paths with metadata\n"
-          "       - pathvia.pkl: Path segment details for each OD path\n"
+          "       - node.csv: [node_id, STATION_NID, STATION_UID, IS_TRANSFER, IS_TERMINAL, LINE_NID].\n"
+          "       - link.csv: [node_id1, node_id2, link_type, link_weight].\n"
+          "       - platform.csv: [physical_platform_id, node_id, uid].\n"
+          "       - path.pkl: [path_id, length, transfer_cnt, path_str].\n"
+          "       - pathvia.pkl: [path_id, pv_id, node_id1, node_id2, link_type, line, updown].\n"
           "======================================================================================"
           "\033[0m")
-    print("\033[33m"
-          "[INFO] Generating node and link files...\n"
-          "\033[0m")
-    nodes, links = get_node_and_link(read_on=read_network)
-    print("\033[33m"
-          "[INFO] Generating path and pathvia files...\n"
-          "\033[0m")
+    nodes, links = get_node_and_link(read_on=False)
+    get_platforms(save_on=True)
     gen_path(nodes, links)
     return
 
 
 if __name__ == "__main__":
-    # _test_k_paths()
-    # main()
     config.load_config()
-    nodes, links = get_node_and_link(read_on=True)
-    net = ChengduMetro(nodes=nodes, links=links)
-    import time
-    a = time.time()
-    df_p, df_pv = net.find_all_pairs_k_paths_parallel()
-    df_p.info()
-    df_pv.info()
-    b = time.time()
-    print(f"Elapsed time: {b - a} seconds")
+    # main()
     pass

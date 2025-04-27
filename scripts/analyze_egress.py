@@ -8,7 +8,6 @@ from src.walk_time_dis import filter_egress_time_from_left, filter_egress_time_f
 
 
 def _check_egress_time_outlier_rejects(uid: int = None):
-    config.load_config()
     from src.utils import read_
     from src.walk_time_dis import reject_outlier_bd, plot_walk_time_dis
 

@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 
 from src import config
-from src.globals import get_k_pv, get_pl_info, get_etd, get_platform, get_ttd
+from src.globals import get_k_pv, get_pl_info, get_etd, get_platform_exceptions, get_ttd
 from src.utils import read_
 
 
@@ -147,7 +147,7 @@ def generate_transfer_info_df_from_path_seg() -> pd.DataFrame:
         # process platform exceptions
         # platform_id -> the smallest platform_id (same physical platform)
         platform_exceptions = {}
-        for pl_grps in get_platform().values():
+        for pl_grps in get_platform_exceptions().values():
             for pl_grp in pl_grps:
                 for platform_id in pl_grp:
                     platform_exceptions[platform_id] = min(pl_grp)
@@ -284,3 +284,105 @@ def cal_cdf(x2cdf: dict[int, float], t_start: int | Iterable[int], t_end: int | 
             "CDF_end values contain NaN. Please check the t_end ranges.")
 
     return cdf_end - cdf_start if len(cdf_start) > 1 else cdf_end[0] - cdf_start[0]
+
+
+class WalkTimeDisCalculator:
+    """
+    A class for calculating walking time distributions (PDF and CDF) for egress, entry, and transfer scenarios.
+
+    This class preloads all necessary mappings during initialization to provide efficient calculations.
+
+    Methods:
+    --------
+    egress_time_dis_calculator(path_id: int, egress_times: int | Iterable[int]) -> float | np.ndarray:
+        Calculate the PDF of egress walking times for a given path ID.
+
+    entry_time_dis_calculator(path_id: int, t_start: int | Iterable[int], t_end: int | Iterable[int]) -> float | np.ndarray:
+        Calculate the CDF of entry walking times for a given path ID.
+
+    transfer_time_dis_calculator(path_id: int, seg_id: int, t_start: int | Iterable[int], t_end: int | Iterable[int]) -> float | np.ndarray:
+        Calculate the CDF of transfer walking times for a given path ID and segment ID.
+
+    Usage:
+    ------
+    1. Initialize the class:
+        calculator = WalkTimeDisCalculator()
+
+    2. Calculate egress time PDF:
+        pdf_values = calculator.egress_time_dis_calculator(path_id=1, egress_times=[10, 20, 30])
+
+    3. Calculate entry time CDF:
+        cdf_values = calculator.entry_time_dis_calculator(path_id=1, t_start=5, t_end=15)
+
+    4. Calculate transfer time CDF:
+        transfer_cdf = calculator.transfer_time_dis_calculator(path_id=1, seg_id=2, t_start=10, t_end=20)
+    """
+
+    def __init__(self):
+        # Load all mappings during initialization
+        self.path_to_platform = map_path_id_to_platform(egress=True, entry=False)
+        self.platform_to_pl_id = map_platform_id_to_pl_id()
+        self.path_seg_to_platforms = map_path_seg_to_platforms()
+        self.pl_id_to_pdf = map_pl_id_to_x2pdf_cdf(pdf=True, cdf=False)
+        self.pl_id_to_cdf = map_pl_id_to_x2pdf_cdf(pdf=False, cdf=True)
+        self.transfer_link_to_cdf = map_transfer_link_to_x2cdf()
+
+    def egress_time_dis_calculator(self, path_id: int, egress_times: int | Iterable[int]) -> float | np.ndarray:
+        """
+        Calculate the PDF of egress walking times for a given path_id.
+        :param path_id: int, the path ID.
+        :param egress_times: int or Iterable[int], the egress walking times.
+        :return: float or np.ndarray, the PDF values.
+        """
+        platform_id = self.path_to_platform.get(path_id)
+        if platform_id is None:
+            raise ValueError(f"Invalid path_id: {path_id}")
+        pl_id = self.platform_to_pl_id.get(platform_id)
+        if pl_id is None:
+            raise ValueError(
+                f"No physical link ID found for platform_id: {platform_id}"
+            )
+        x2pdf = self.pl_id_to_pdf.get(pl_id, {})
+        return cal_pdf(x2pdf, egress_times)
+
+    def entry_time_dis_calculator(
+        self, path_id: int, t_start: int | Iterable[int], t_end: int | Iterable[int]
+    ) -> float | np.ndarray:
+        """
+        Calculate the CDF of entry walking times for a given path_id.
+        :param path_id: int, the path ID.
+        :param t_start: int or Iterable[int], the start times.
+        :param t_end: int or Iterable[int], the end times.
+        :return: float or np.ndarray, the CDF values.
+        """
+        platform_id = self.path_to_platform.get(path_id)
+        if platform_id is None:
+            raise ValueError(f"Invalid path_id: {path_id}")
+        pl_id = self.platform_to_pl_id.get(platform_id)
+        if pl_id is None:
+            raise ValueError(
+                f"No physical link ID found for platform_id: {platform_id}"
+            )
+        x2cdf = self.pl_id_to_cdf.get(pl_id, {})
+        return cal_cdf(x2cdf, t_start, t_end)
+
+    def transfer_time_dis_calculator(
+        self,
+        path_id: int,
+        seg_id: int,
+        t_start: int | Iterable[int],
+        t_end: int | Iterable[int],
+    ) -> float | np.ndarray:
+        """
+        Calculate the CDF of transfer walking times for a given path_id and segment ID.
+        :param path_id: int, the path ID.
+        :param seg_id: int, the segment ID.
+        :param t_start: int or Iterable[int], the start times.
+        :param t_end: int or Iterable[int], the end times.
+        :return: float or np.ndarray, the CDF values.
+        """
+        transfer_key = self.path_seg_to_platforms.get((path_id, seg_id))
+        if transfer_key is None:
+            raise ValueError(f"Invalid (path_id, seg_id): ({path_id}, {seg_id})")
+        x2cdf = self.transfer_link_to_cdf.get(transfer_key, {})
+        return cal_cdf(x2cdf, t_start, t_end)

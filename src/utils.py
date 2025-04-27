@@ -66,37 +66,6 @@ def tqdm_joblib(tqdm_object):
         tqdm_object.close()
 
 
-@execution_timer  # ~ 0.1433 seconds for AFC
-def read_data(fn: str = "AFC", show_timer: bool = False, drop_cols: bool = True) -> pd.DataFrame | dict | list:
-    """
-    LEGACY METHOD: Please use read_() instead.
-
-    Read data file and drop specific columns based on file name.
-    """
-    if fn.endswith(".csv"):
-        df = pd.read_csv(f"{config.CONFIG['data_folder']}//{fn}")
-    elif fn.endswith(".parquet"):
-        df = pd.read_parquet(f"{config.CONFIG['data_folder']}//{fn}")
-    elif fn.endswith(".pkl"):
-        df = pd.read_pickle(f"{config.CONFIG['data_folder']}//{fn}")
-    elif fn.endswith(".json"):
-        with open(f"{config.CONFIG['data_folder']}//{fn}", "r") as f:
-            df = json.load(f)
-    else:
-        df = pd.read_pickle(f"{config.CONFIG['data_folder']}//{fn}.pkl")
-
-    if drop_cols:
-        if fn == "AFC":
-            df = df.drop(columns=["STATION1_NID", "STATION2_NID", "STATION1_TIME", "STATION2_TIME"])
-        elif fn == "STA":
-            df = df.drop(columns=["STATION_NAME", "STATION_NAME_E"])
-        elif fn == "TT":
-            df = df.drop(
-                columns=["TRAIN_NUMBER", "STATION_NAME", "O_STATION", "T_STATION", "ARRIVE_TIME", "DEPARTURE_TIME",
-                         "TRAIN_ID_old"])
-    return df
-
-
 def split_fn_index_ext(full_fn: str) -> tuple[str, str, str]:
     """
     Split a filename into its base name, index, and extension.
@@ -139,7 +108,7 @@ def get_folder_and_subfolder(fn: str, ext: str) -> tuple[str, str]:
     if fn + ext in config.CONFIG['data']:
         return config.CONFIG['data_folder'], ""
     elif fn + ext in config.CONFIG['results'].values():
-        return config.CONFIG['results_folder'], determine_results_subfolder(fn + ext)
+        return config.CONFIG['results_folder'], config.determine_results_subfolder(fn + ext)
     else:
         raise ValueError(f"Unknown file: {fn + ext}")
 
@@ -170,53 +139,6 @@ def get_file_path(fn: str, latest_: bool = False) -> str:
         index = f"_{get_latest_file_index(fn+ext, folder=folder, subfolder=subfolder, get_next=False)}"
 
     return os.path.join(folder, subfolder, fn + index + ext)
-
-
-def determine_results_subfolder(fn: str) -> str:
-    """
-    Determines the subfolder for results files based on the file name.
-    """
-    if fn in [
-        config.CONFIG["results"]["node"],
-        config.CONFIG["results"]["link"]
-    ]:
-        return config.CONFIG["results_subfolder"]["network"]
-
-    elif fn in [
-        config.CONFIG["results"]["path"],
-        config.CONFIG["results"]["pathvia"]
-    ]:
-        return config.CONFIG["results_subfolder"]["path"]
-
-    elif fn in [
-        config.CONFIG["results"]["feas_iti"],
-        config.CONFIG["results"]["AFC_no_iti"]
-    ]:
-        return config.CONFIG["results_subfolder"]["itinerary"]
-
-    elif fn in [
-        config.CONFIG["results"]["assigned"],
-        config.CONFIG["results"]["left"],
-        config.CONFIG["results"]["stashed"]
-    ]:
-        return config.CONFIG["results_subfolder"]["trajectory"]
-
-    elif fn in [
-        config.CONFIG["results"]["egress_times"],
-        config.CONFIG["results"]["physical_links"],
-        config.CONFIG["results"]["etd"]
-    ]:
-        return config.CONFIG["results_subfolder"]["egress"]
-
-    elif fn in [
-        config.CONFIG["results"]["transfer_times"],
-        config.CONFIG["results"]["ttd"],
-        config.CONFIG["results"]["transfer_links"]
-    ]:
-        return config.CONFIG["results_subfolder"]["transfer"]
-
-    else:
-        raise ValueError(f"Unknown file to determine results subfolder: {fn}")
 
 
 def get_latest_file_index(fn: str, folder: str = "", subfolder: str = "", get_next: bool = False) -> int:
@@ -361,7 +283,7 @@ def save_(fn: str, data: pd.DataFrame, auto_index_on: bool = False) -> None:
     if fn.endswith(".pkl"):
         saving_method = data.to_pickle
     elif fn.endswith(".csv"):
-        saving_method = data.to_csv
+        saving_method = lambda x: data.to_csv(x, index=data.index.name is not None)  # Keep index name if it exists
     elif fn.endswith(".parquet"):
         saving_method = data.to_parquet
     else:
