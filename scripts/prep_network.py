@@ -64,11 +64,12 @@ def get_platforms(save_on: bool) -> pd.DataFrame:
 def gen_path(nodes: pd.DataFrame, links: pd.DataFrame):
     # generate k-paths files
     net = ChengduMetro(nodes=nodes, links=links)
-    df_p, df_pv = net.find_all_pairs_k_paths(
+    df_p, df_pv = net.find_all_pairs_k_paths_parallel(
         k=config.CONFIG["parameters"]["k"],
         theta1=config.CONFIG["parameters"]["theta1"],
         theta2=config.CONFIG["parameters"]["theta2"],
-        transfer_deviation=config.CONFIG["parameters"]["transfer_deviation"]
+        transfer_deviation=config.CONFIG["parameters"]["transfer_deviation"],
+        n_jobs=-1,
     )  # takes 3 hours to run
     save_(config.CONFIG["results"]["path"], df_p, auto_index_on=False)
     save_(config.CONFIG["results"]["pathvia"], df_pv, auto_index_on=False)

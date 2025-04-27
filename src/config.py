@@ -91,11 +91,13 @@ def check_used_results(config: dict):
     if config['use_existing']["itinerary"]:
         check_file_exists(config, config["results_subfolder"]["itinerary"], "feas_iti")
         # check_file_exists(config, config["results_subfolder"]["itinerary"], "AFC_no_iti")  # potentially not needed
+        pass
 
     if config['use_existing']["trajectory"]:
         check_file_exists(config, config["results_subfolder"]["trajectory"], "left")
         check_file_exists(config, config["results_subfolder"]["trajectory"], "stashed")
         # check_file_exists(config, config["results_subfolder"]["trajectory"], "assigned")  # not yet implemented for auto index files
+        pass
 
 
 def check_file_exists(config: dict, subfolder: str, result_key: str):

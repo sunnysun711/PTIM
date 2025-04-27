@@ -160,7 +160,7 @@ def gen_walk_links_from_nodes(
     """
     platform_exceptions = get_platform_exceptions() if platform_exceptions is None else platform_exceptions
     # print(platform_exceptions)
-    nodes = get_node_info().dropna(subset=["LINE_NID"]) if nodes is None else nodes
+    nodes = get_node_info().dropna(subset=["LINE_NID"]).set_index("node_id") if nodes is None else nodes
 
     links = []  # [node_id1, node_id2, link_type, link_weight]
 
