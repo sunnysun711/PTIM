@@ -16,15 +16,6 @@ Import and call the following functions as needed:
 - `get_pdf()`: Calculate PDF from walking time samples.
 - `get_cdf()`: Calculate CDF from walking time samples.
 """
-from src import config
-from src.utils import read_, read_all, ts2tstr
-from src.globals import get_afc, get_k_pv, get_pl_info, get_etd, get_link_info, get_platform, get_ttd
-from tqdm import tqdm
-from scipy.stats import kstest
-from joblib import Parallel, delayed
-from matplotlib import pyplot as plt
-import seaborn as sns
-from itertools import combinations
 import os
 from typing import Callable, Iterable
 
@@ -33,6 +24,17 @@ import pandas as pd
 import matplotlib
 
 matplotlib.use('TkAgg')
+
+from tqdm import tqdm
+from scipy.stats import kstest
+from joblib import Parallel, delayed
+from matplotlib import pyplot as plt
+import seaborn as sns
+from itertools import combinations
+
+from src import config
+from src.utils import read_, read_all, ts2tstr
+from src.globals import get_afc, get_k_pv, get_pl_info, get_etd, get_platform, get_ttd
 
 
 def filter_egress_time_from_left() -> pd.DataFrame:
