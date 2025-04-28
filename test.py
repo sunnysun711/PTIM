@@ -128,31 +128,15 @@ def test4():
 def test5():
     import os
     from src.utils import read_
+    from src.walk_time_plot import plot_transfer_all
 
-    eg_t = read_(fn=config.CONFIG["results"]["egress_times"], show_timer=False, latest_=True)
-
-    platforms = get_platform()  # pp_id, node_id, uid
-    # df_pl = pd.DataFrame(platforms, columns=["pp_id", "node_id", "uid"])
-
-    # save_subfolder = "egress_times"
-    # saving_dir = config.CONFIG["figure_folder"] + "/" + save_subfolder
-    # if save_subfolder and not os.path.exists(saving_dir):
-    #     os.makedirs(saving_dir)
+    # eg_t = read_(fn=config.CONFIG["results"]["egress_times"], show_timer=False, latest_=True)
+    # plot_egress_time_dis_all(eg_t, save_on=True, save_subfolder="ETD0")
     
-    print(f"[INFO] Plotting ETD...")
-    for uid in range(1001, 1137):
-        print(f"[INFO] Plotting ETD for UID: {uid}")
-        all_pp_this_uid = np.unique(platforms[platforms[:, 2] == uid][:, 0])
-        for pp_id in all_pp_this_uid:
-            print(pp_id)
-            et = eg_t[eg_t["physical_platform_id"] == pp_id]
-            if et.shape[0] == 0:
-                print(f"[INFO] No egress time data for pp_id {pp_id}.")
-                continue
-            print(et.shape)
-            # TODO: 目前正在实现egress画图方法，发现了一个bug，太平园站10号线下行的那个物理站台103803不存在出站记录，也就意味着进站步行时间分布到时候没办法计算。
-            # TODO: pp_id: 103803 (Line 10 Down) no egress time data. so when calculating entry cdf, it will be empty. 
-            # (FIXME: manually use pp_id: 103802 (Line 10 Up, Line 3 Up) or 103804 (Line 3 Down))
+    tr_t = read_(fn=config.CONFIG["results"]["transfer_times"], show_timer=False, latest_=True)
+    print(tr_t.head())
+    plot_transfer_all(tr_t, save_on=True, save_subfolder="TTD0")
+    
     
         
         
