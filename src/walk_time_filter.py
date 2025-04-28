@@ -1,3 +1,31 @@
+"""
+This module is dedicated to filtering and processing egress and transfer time data
+from various data sources, specifically `left.pkl` and `assigned_*.pkl` files. It
+plays a crucial role in preparing the data for further analysis and visualization
+related to passenger trajectories.
+
+Key functionalities include:
+- Extracting egress times from different data sources and mapping them to physical 
+    platform IDs.
+- Calculating egress times based on the difference between alighting and tap-out 
+    times.
+- Validating data consistency to ensure accurate results.
+- Extracting transfer times and mapping them to physical platform ID pairs.
+- Processing and aggregating data to obtain essential information for analysis.
+
+The module provides several utility functions that handle different aspects of data
+extraction, calculation, and filtering. These functions are designed to be modular
+and reusable, facilitating the overall data processing pipeline.
+
+Functions:
+    get_egress_from_left(): Extract egress times from left.pkl.
+    get_egress_from_assigned(): Extract egress times from assigned_*.pkl.
+    _calculate_egress_time(): Calculate egress time for the given last-seg DataFrame.
+    filter_egress_all(): Combine and filter all egress time data.
+    get_transfer_from_assigned(): Extract transfer times from assigned_*.pkl.
+    get_path_seg_to_pp_ids(): Map path_id and seg_id to physical platform IDs.
+    filter_transfer_all(): Combine and filter all transfer time data.
+"""
 import numpy as np
 import pandas as pd
 
@@ -122,6 +150,7 @@ def filter_egress_all() -> pd.DataFrame:
 def get_transfer_from_assigned() -> pd.DataFrame:
     """
     Find transfer times from assigned_*.pkl files.
+    
     :return: DataFrame with columns:
         ["rid", "path_id", "seg_id", "alight_ts", "transfer_time"]
         where seg_id is the alighting train segment id, the transfer time is thus considered as the time difference
@@ -147,7 +176,9 @@ def get_transfer_from_assigned() -> pd.DataFrame:
 
 
 def get_path_seg_to_pp_ids():
-    """get path_id, seg_id to physical platform IDs mapping dataframe.
+    """
+    Get path_id, seg_id to physical platform IDs mapping dataframe.
+    
     :return: DataFrame with 5 columns:
         ["path_id", "seg_id", "pp_id1", "pp_id2", "transfer_type"]
     """
