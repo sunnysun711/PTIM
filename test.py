@@ -109,7 +109,9 @@ def test4():
         print(f"Egress time calculation failed: {e}")
 
     try:  # entry time CDF calculation
-        cdf_values = calculator.entry_time_dis_calculator(path_id, np.zeros_like(entry_times), entry_times)
+        cdf_values = calculator.entry_time_dis_calculator(
+            path_id, np.zeros_like(entry_times), entry_times
+        )
         print(f"Entry CDF for path_id={path_id}, times={entry_times}: {cdf_values}")
     except Exception as e:
         print(f"Entry time calculation failed: {e}")
@@ -129,17 +131,10 @@ def test4():
 
 def test5():
     import os
-    from src.utils import read_
-    from src.walk_time_dis_fit import fit_transfer_time_dis_all
+    from src.globals import get_etd, get_ttd
 
-    tr_t = read_("transfer_times", latest_=True, show_timer=False)
-    # print(tr_t[tr_t["pp_id1"] > tr_t["pp_id2"]].shape)
-    # print(tr_t.groupby(["pp_id1", "pp_id2"]).size())
-
-    res = fit_transfer_time_dis_all(tr_t=tr_t)
-    print(res)
-    print(res.shape)
-
+    print(get_etd())
+    print(get_ttd())
     ...
 
 
