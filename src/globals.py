@@ -197,15 +197,15 @@ def get_etd() -> np.ndarray:
     Get global variable ETD.
     If ETD is not initialized, read from the latest version of etd.pkl and store in ETD.
     :return: Array of shape (n, 4) with columns:
-        ['pl_id', 'x', 'pdf', 'cdf']
-        where `pl_id` is the physical link ID, `x` is egress time index (0-500).
+        ['pp_id', 'x', 'pdf', 'cdf']
+        where `pp_id` is the physical platform ID, `x` is egress time index (0-500).
     """
     global ETD
     if ETD is None:
         ETD = read_(config.CONFIG["results"]["etd"],
                     show_timer=False, latest_=True)
         ETD = ETD[[
-            "pl_id", "x", f"{config.CONFIG['parameters']['distribution_type']}_pdf",
+            "pp_id", "x", f"{config.CONFIG['parameters']['distribution_type']}_pdf",
             f"{config.CONFIG['parameters']['distribution_type']}_cdf",
         ]].values
     return ETD
@@ -215,8 +215,8 @@ def get_ttd() -> np.ndarray:
     """
 
     :return: Array of shape (n, 4) with columns:
-        ['p_uid1', 'p_uid2', 'x', 'cdf']
-        where `p_uid1` and `p_uid2` are the min and max platform_uids of the two platforms involved in the transfer,
+        ['pp_id_min', 'pp_id_max', 'x', 'cdf']
+        where `pp_id_min` and `pp_id_max` are the min and max platform_uids of the two platforms involved in the transfer,
         `x` is the transfer time index (0-500), and `cdf` is the cumulative distribution function.
         Note that for platform_swap transfers, x only has one value as zero.
     """
@@ -225,7 +225,7 @@ def get_ttd() -> np.ndarray:
         TTD = read_(config.CONFIG["results"]["ttd"],
                     show_timer=False, latest_=True)
         TTD = TTD[[
-            "p_uid1", "p_uid2", "x",
+            "pp_id_min", "pp_id_max", "x",
             f"{config.CONFIG['parameters']['distribution_type']}_cdf",
             # "kde_cdf", "gamma_cdf", "lognorm_cdf"
         ]].values

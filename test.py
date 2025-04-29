@@ -6,6 +6,8 @@ import pandas as pd
 
 from src import config
 from src.globals import get_afc, get_k_pv_dict, get_tt, get_platform
+
+
 # from src.walk_time_dis import *
 
 
@@ -128,20 +130,16 @@ def test4():
 def test5():
     import os
     from src.utils import read_
-    from src.walk_time_plot import plot_transfer_all
+    from src.walk_time_dis_fit import fit_transfer_time_dis_all
 
-    # eg_t = read_(fn=config.CONFIG["results"]["egress_times"], show_timer=False, latest_=True)
-    # plot_egress_time_dis_all(eg_t, save_on=True, save_subfolder="ETD0")
-    
-    tr_t = read_(fn=config.CONFIG["results"]["transfer_times"], show_timer=False, latest_=True)
-    print(tr_t.head())
-    plot_transfer_all(tr_t, save_on=True, save_subfolder="TTD0")
-    
-    
-        
-        
-            
-    
+    tr_t = read_("transfer_times", latest_=True, show_timer=False)
+    # print(tr_t[tr_t["pp_id1"] > tr_t["pp_id2"]].shape)
+    # print(tr_t.groupby(["pp_id1", "pp_id2"]).size())
+
+    res = fit_transfer_time_dis_all(tr_t=tr_t)
+    print(res)
+    print(res.shape)
+
     ...
 
 
@@ -167,7 +165,10 @@ if __name__ == "__main__":
     # print("Test 4".center(100, " "))
     # print("=" * 100)
     # test4()
-    
+
+    print("=" * 100)
+    print("Test 5".center(100, " "))
+    print("=" * 100)
     test5()
 
     pass

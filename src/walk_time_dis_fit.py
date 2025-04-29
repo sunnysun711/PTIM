@@ -5,6 +5,8 @@ from scipy.stats import kstest
 from joblib import Parallel, delayed
 from tqdm import tqdm
 
+from src.globals import get_platform
+
 
 def reject_outlier_bd(data: np.ndarray, method: str = "zscore", abs_max: int | None = 500) -> tuple[float, float]:
     """
@@ -111,29 +113,30 @@ def evaluate_fit(data: np.ndarray, cdf_func: Callable) -> tuple[float, float]:
     return kstest(data_sorted, cdf_func)
 
 
-def fit_one_pl(pl_id: int, et_: pd.DataFrame, physical_link_info: np.ndarray, x: np.ndarray) -> np.ndarray | None:
+def fit_one_physical_platform(pp_id: int, eg_t_data: np.ndarray, x: np.ndarray) -> np.ndarray | None:
     """
-    Fit the distribution of physical links egress time with the following columns:
+    Fit the distribution of physical platform egress time with the following columns:
         [
-            pl_id, x,
+            pp_id, x,
             kde_pdf, kde_cdf, kde_ks_stat, kde_ks_p_value,
             gamma_pdf, gamma_cdf, gamma_ks_stat, gamma_ks_p_value,
             lognorm_pdf, lognorm_cdf, lognorm_ks_stat, lognorm_ks_p_value
         ]
-    :param pl_id: physical link id
-    :param et_: egress time dataframe
-    :param physical_link_info: physical link info array, each row is [pl_id, platform_id, uid]
-    :param x: x values for pdf and cdf, usually [0, 500] with 501 points
 
-    :return: array with shape (x.size, 14) or None
+    Parameters:
+    --------
+    :param pp_id: Physical platform ID.
+    :param eg_t_data: Egress time numpy array of the current physical platform.
+    :param x: X values for PDF and CDF, usually [0, 500] with 501 points.
+
+    Returns:
+    --------
+    :return: np.ndarray | None: Array with shape (x.size, 14) or None.
     """
-    et = et_[et_["node1"].isin(
-        physical_link_info[physical_link_info[:, 0] == pl_id][:, 1])]
-    if et.shape[0] == 0:
+    if eg_t_data.size == 0:
         return None
-    data = et['egress_time'].values
-    data = reject_outlier(data, method="zscore", abs_max=500)
-    res_this_pl = [np.ones_like(x) * pl_id, x]
+    data = reject_outlier(eg_t_data, method="zscore", abs_max=500)
+    res_this_pp = [np.ones_like(x) * pp_id, x]
 
     for met in ["kde", "gamma", "lognorm"]:
         pdf_f, cdf_f = fit_pdf_cdf(data, method=met)
@@ -141,88 +144,94 @@ def fit_one_pl(pl_id: int, et_: pd.DataFrame, physical_link_info: np.ndarray, x:
         cdf_values = cdf_f(x)
         cdf_values = cdf_values / cdf_values[-1]  # normalize
         ks_stat, ks_p_val = evaluate_fit(data=data, cdf_func=cdf_f)
-        res_this_pl.extend([pdf_values, cdf_values,
+        res_this_pp.extend([pdf_values, cdf_values,
                             np.ones_like(x) * ks_stat,
                             np.ones_like(x) * ks_p_val])
+    return np.vstack(res_this_pp).T
 
-    return np.vstack(res_this_pl).T
 
-
-def fit_egress_time_dis_all_parallel(
-        et_: pd.DataFrame,
-        physical_link_info: np.ndarray = None,
-        n_jobs: int = -1
-) -> pd.DataFrame:
+def fit_platform_egress_time_dis_all_parallel(
+        eg_t: pd.DataFrame, n_jobs: int = -1
+):
     """
-    Fit the distribution of physical links egress time with the following columns:
+    Fit the distribution of physical platform egress time with the following columns:
         [
-            pl_id, x,
+            pp_id, x,
             kde_pdf, kde_cdf, kde_ks_stat, kde_ks_p_value,
             gamma_pdf, gamma_cdf, gamma_ks_stat, gamma_ks_p_value,
             lognorm_pdf, lognorm_cdf, lognorm_ks_stat, lognorm_ks_p_value
         ]
-    :param et_: egress time dataframe
-    :param physical_link_info: physical link info array, each row is [pl_id, platform_id, uid]
-    :param n_jobs: number of jobs to run in parallel, default is -1 (use all available cores)
 
-    :return: dataframe with shape (n_pl * 501, 14)
+    :param eg_t: Egress time dataframe.
+        Each row is [rid (index), physical_platform_id, alight_ts, egress_time].
+    :param n_jobs: Number of threads to use. Default is -1, which uses all available threads.
+
+    :return: pd.DataFrame: Dataframe with shape (x.size * pp_id.size, 14).
+        Each row is [pp_id, x, kde_pdf, kde_cdf, kde_ks_stat, kde_ks_p_value,
+                    gamma_pdf, gamma_cdf, gamma_ks_stat, gamma_ks_p_value,
+                    lognorm_pdf, lognorm_cdf, lognorm_ks_stat, lognorm_ks_p_value].
     """
     print(
         f"[INFO] Start fitting egress time distribution using {n_jobs} threads...")
 
     x = np.linspace(0, 500, 501)
-    physical_link_info = physical_link_info if physical_link_info is not None else get_physical_links_info(
-        et_=et_)
-    pl_ids = np.unique(physical_link_info[:, 0])
+    platform: np.ndarray = get_platform()  # [pp_id, node_id, uid]
+
+    pp_ids = np.unique(platform[:, 0])
 
     results = Parallel(n_jobs=n_jobs)(
-        delayed(fit_one_pl)(pl_id, et_, physical_link_info, x) for pl_id in
-        tqdm(pl_ids, desc="Physical links egress time distribution fitting")
+        delayed(fit_one_physical_platform)(
+            pp_id=pp_id,
+            eg_t_data=eg_t[eg_t["physical_platform_id"] == pp_id]["egress_time"].values,
+            x=x,
+        )
+        for pp_id in tqdm(pp_ids, desc="Egress time distribution fitting for each physical platform")
     )
     results = [res for res in results if res is not None]
     res = np.vstack(results)
-
     return pd.DataFrame(res, columns=[
-        "pl_id", "x",
+        "pp_id", "x",
         "kde_pdf", "kde_cdf", "kde_ks_stat", "kde_ks_p_value",
         "gamma_pdf", "gamma_cdf", "gamma_ks_stat", "gamma_ks_p_value",
         "lognorm_pdf", "lognorm_cdf", "lognorm_ks_stat", "lognorm_ks_p_value"
     ])
 
 
-def fit_transfer_time_dis_all(df_tt: pd.DataFrame, df_ps2t: pd.DataFrame) -> pd.DataFrame:
+def fit_transfer_time_dis_all(tr_t: pd.DataFrame) -> pd.DataFrame:
     """
     Fit the distribution of transfer time for all transfer links.
-
-    :param df_tt: Filtered transfer time DataFrame with 4 columns:
-        ["path_id", "seg_id", "alight_ts", "transfer_time"]
-        where seg_id is the alighting train segment id, transfer_time is the time difference between the alighting
-        time of seg_id and the boarding time of seg_id + 1.
-    :param df_ps2t: Generated transfer info mapping from path seg, DataFrame with 7 columns:
-        ["path_id", "seg_id", "node1", "node2", "p_uid_min", "p_uid_max", "transfer_type"]
-        where seg_id is the alighting train segment id, transfer_type is one of "platform_swap", "egress-entry",
-        and p_uid_min, p_uid_max are the platform_uids of the two platforms involved in the transfer.
-
-    :return: DataFrame with 6 columns:
-        [p_uid1, p_uid2, x, kde_cdf, gamma_cdf, lognorm_cdf]
-        where p_uid1, p_uid2 are smaller and larger platform_uid of the transfer link.
+    :param tr_t: Transfer time dataframe.
+        Columns: [rid(index), path_id, seg_id, pp_id1, pp_id2, alight_ts, transfer_time, transfer_type]
+    :return: Dataframe with columns:
+        [pp_id_min, pp_id_max, x, kde_cdf, gamma_cdf, lognorm_cdf]
+        where pp_id_min and pp_id_max are the physical platform ids of the transfer link,
+        x is the transfer time, and kde_cdf, gamma_cdf, lognorm_cdf are the CDF values of the transfer time distribution
+        fitted with KDE, Gamma, and Log-Normal distributions respectively.
+        Each row is a transfer link.
+        Note: for platform_swap transfers (pp_id_min=pp_id_max), the CDF values are all 1, and x is only one value as 0.
+        Note: for egress-entry transfers, the CDF values are normalized to [0, 1].
     """
     print("[INFO] Start fitting transfer time distribution...")
-    # merge df_tt and df_p2t to get (p_uid_min, p_uid_max) -> transfer_time info
-    df = pd.merge(df_tt, df_ps2t, on=["path_id", "seg_id"], how="left")
+    platform: np.ndarray = get_platform()  # [pp_id, node_id, uid]
+
+    tr_t["pp_id_min"] = tr_t[["pp_id1", "pp_id2"]].min(axis=1)
+    tr_t["pp_id_max"] = tr_t[["pp_id1", "pp_id2"]].max(axis=1)
 
     x = np.linspace(0, 500, 501)
     res = []
     # for egress-entry transfers:
-    for (p_uid1, p_uid2), df_ in df[df["transfer_type"] == "egress-entry"].groupby(["p_uid_min", "p_uid_max"])[
-            "transfer_time"]:
+    for (pp_id_min, pp_id_max), df_ in tr_t[tr_t["transfer_type"] == "egress-entry"].groupby(
+            ["pp_id_min", "pp_id_max"])["transfer_time"]:
         data = df_.values
-        print(p_uid1, p_uid2, data.size, end=" -> ")
+        print(pp_id_min, pp_id_max, data.size, end=" -> ")
         data = reject_outlier(data, abs_max=500)
         print(data.size, end="\t | ")
 
-        res_this_transfer = [np.ones_like(
-            x) * p_uid1, np.ones_like(x) * p_uid2, x]
+        res_this_transfer = [
+            np.ones_like(x) * pp_id_min,
+            np.ones_like(x) * pp_id_max,
+            x
+        ]
         for met in ["kde", "gamma", "lognorm"]:
             pdf_f, cdf_f = fit_pdf_cdf(data, method=met)
             cdf_values = cdf_f(x)
@@ -232,19 +241,20 @@ def fit_transfer_time_dis_all(df_tt: pd.DataFrame, df_ps2t: pd.DataFrame) -> pd.
             res_this_transfer.extend([cdf_values])
         res.append(np.vstack(res_this_transfer).T)
         print()
+
     # for platform_swap transfers: just defaults to 1
-    for (p_uid1, p_uid2), df_ in df[df["transfer_type"] == "platform_swap"].groupby(["p_uid_min", "p_uid_max"])[
-            "transfer_time"]:
+    for (pp_id_min, pp_id_max), df_ in tr_t[tr_t["transfer_type"] == "platform_swap"].groupby(
+            ["pp_id_min", "pp_id_max"])["transfer_time"]:
         data = df_.values
-        print(p_uid1, p_uid2, data.size)
+        print(pp_id_min, pp_id_max, data.size)
         res.append(np.array([[
-            p_uid1, p_uid2, 0, 1, 1, 1
+            pp_id_min, pp_id_max, 0, 1, 1, 1
         ]]))
     res = np.vstack(res)
     res = pd.DataFrame(res, columns=[
-        "p_uid1", "p_uid2", "x",
+        "pp_id_min", "pp_id_max", "x",
         "kde_cdf", "gamma_cdf", "lognorm_cdf"
     ])
-    for col in ["p_uid1", "p_uid2", "x"]:
+    for col in ["pp_id_min", "pp_id_max", "x"]:
         res[col] = res[col].astype(int)
     return res
