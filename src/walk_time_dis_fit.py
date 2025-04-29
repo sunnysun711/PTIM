@@ -1,3 +1,29 @@
+"""
+This module contains utility functions for fitting probability density 
+functions (PDF) and cumulative distribution functions (CDF) to various time
+data, including egress and transfer times.
+
+Key functionalities include:
+- Rejecting outliers based on the z-score or boxplot method.
+- Fitting different distribution models (KDE, Gamma, Log-Normal) to egress 
+    and transfer time data.
+- Evaluating the goodness-of-fit using the Kolmogorov-Smirnov (K-S) test.
+
+Functions:
+    reject_outlier_bd(): Calculate the bounds for outlier rejection based on 
+        a specified method.
+    reject_outlier(): Reject outliers from data using the method specified 
+        (z-score or boxplot).
+    fit_pdf_cdf(): Fit a probability distribution (KDE, Gamma, or Log-Normal) 
+        to the input data.
+    evaluate_fit(): Perform a K-S test to evaluate the fit of a CDF to data.
+    fit_one_physical_platform(): Fit the distribution of egress times for a 
+        single physical platform.
+    fit_platform_egress_time_dis_all_parallel(): Fit egress time 
+        distributions for all physical platforms in parallel.
+    fit_transfer_time_dis_all(): Fit transfer time distributions for all 
+        transfer links.
+"""
 from typing import Callable
 import numpy as np
 import pandas as pd

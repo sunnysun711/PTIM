@@ -69,9 +69,9 @@ from src.walk_time_filter import get_path_seg_to_pp_ids
 
 class WalkTimeDisCalculator:
     def __init__(
-        self,
-        etd: np.ndarray = None,
-        ttd: np.ndarray = None,
+            self,
+            etd: np.ndarray = None,
+            ttd: np.ndarray = None,
     ):
         """
         Walk Time Distribution Calculator
@@ -109,10 +109,10 @@ class WalkTimeDisCalculator:
         df_egress = df_k_pv.iloc[df_entry.index - 1].copy()
 
         assert (
-            df_entry["link_type"] == "entry"
+                df_entry["link_type"] == "entry"
         ).all(), "df_entry contains incorrect link types."
         assert (
-            df_egress["link_type"] == "egress"
+                df_egress["link_type"] == "egress"
         ).all(), "df_egress contains incorrect link types."
 
         df_entry["pp_id"] = df_entry["node_id2"].map(node_id_to_pp_id)
@@ -130,12 +130,13 @@ class WalkTimeDisCalculator:
         df = get_path_seg_to_pp_ids()
         df["pp_id_min"] = df[["pp_id1", "pp_id2"]].min(axis=1)
         df["pp_id_max"] = df[["pp_id1", "pp_id2"]].max(axis=1)
-        self.path_seg2pp_id_mima: pd.DataFrame = df.drop(columns=["pp_id1", "pp_id2"])
+        self.path_seg2pp_id_mima: pd.DataFrame = df.drop(
+            columns=["pp_id1", "pp_id2"])
 
     def _build_pp_id_lookup_table(
-        self,
-        column_idx: int,
-        attr_name: str,
+            self,
+            column_idx: int,
+            attr_name: str,
     ):
         """
         General function to build lookup tables for pp_id -> distribution values.
@@ -148,11 +149,13 @@ class WalkTimeDisCalculator:
 
         for pp_id in np.unique(get_platform()[:, 0]):
             # Normal case
-            etd_filtered = self.etd[self.etd[:, 0] == pp_id][:, [1, column_idx]]
+            etd_filtered = self.etd[self.etd[:, 0]
+                                    == pp_id][:, [1, column_idx]]
 
             # Special manual handling for TaiPingYuan
             if pp_id == 103803:
-                etd_filtered = self.etd[self.etd[:, 0] == 103804][:, [1, column_idx]]
+                etd_filtered = self.etd[self.etd[:, 0]
+                                        == 103804][:, [1, column_idx]]
 
             assert etd_filtered.size > 0, f"No ETD data found for pp_id {pp_id}."
 
@@ -166,9 +169,9 @@ class WalkTimeDisCalculator:
         self.transfer_mima2cdf_table: dict[tuple[int, int], np.ndarray] = {}
 
         for pp_id_min, pp_id_max in (
-            self.path_seg2pp_id_mima[["pp_id_min", "pp_id_max"]]
-            .drop_duplicates()
-            .values
+                self.path_seg2pp_id_mima[["pp_id_min", "pp_id_max"]]
+                        .drop_duplicates()
+                        .values
         ):
             if pp_id_min == pp_id_max:  # platform swap detected, all set to one.
                 self.transfer_mima2cdf_table[(int(pp_id_min), int(pp_id_max))] = (
@@ -177,13 +180,13 @@ class WalkTimeDisCalculator:
                 continue
 
             ttd_filtered = self.ttd[
-                (self.ttd[:, 0] == pp_id_min) & (self.ttd[:, 1] == pp_id_max)
-            ][
-                :, [2, 3]
-            ]  # Columns: [x, cdf]
+                               (self.ttd[:, 0] == pp_id_min) & (self.ttd[:, 1] == pp_id_max)
+                               ][
+                           :, [2, 3]
+                           ]  # Columns: [x, cdf]
 
             assert (
-                ttd_filtered.size > 0
+                    ttd_filtered.size > 0
             ), f"No transfer time data for pp_id_min={pp_id_min}, pp_id_max={pp_id_max}."
 
             self.transfer_mima2cdf_table[(int(pp_id_min), int(pp_id_max))] = (
@@ -191,9 +194,9 @@ class WalkTimeDisCalculator:
             )
 
     def get_egress_dis(
-        self,
-        path_id: int,
-        times: int | np.ndarray | pd.Series,
+            self,
+            path_id: int,
+            times: int | np.ndarray | pd.Series,
     ) -> float | np.ndarray:
         """
         Retrieve egress PDF values for the given path_id and times.
@@ -208,12 +211,12 @@ class WalkTimeDisCalculator:
         """
         egress_pp_id = self.path_id2egress_pp_id.get(path_id, None)
         assert (
-            egress_pp_id is not None
+                egress_pp_id is not None
         ), f"Egress physical platform ID not found for path {path_id}."
 
-        lookup_table = self.pp_id2pdf_table.get(egress_pp_id, 0)
+        lookup_table = self.pp_id2pdf_table.get(egress_pp_id, None)
         assert (
-            lookup_table is not None
+                lookup_table is not None
         ), f"No lookup table found for egress pp_id {egress_pp_id}."
 
         times = np.atleast_1d(times)
@@ -226,11 +229,49 @@ class WalkTimeDisCalculator:
 
         return output if output.size > 1 else output[0]
 
-    def get_entry_dis(
+    def _lookup_time_range_deltas(
         self,
-        path_id: int,
-        times_start: int | np.ndarray | pd.Series,
-        times_end: int | np.ndarray | pd.Series,
+        lookup_table: np.ndarray,
+        t_start: int | np.ndarray | pd.Series,
+        t_end: int | np.ndarray | pd.Series,
+    ) -> float | np.ndarray:
+        """
+        Look up time range deltas in the given lookup table.
+
+        Args:
+            lookup_table (np.ndarray): Lookup table containing CDF values.
+            t_start (int | np.ndarray | pd.Series): Start time(s) for lookup.
+            t_end (int | np.ndarray | pd.Series): End time(s) for lookup.
+
+        Returns:
+            float or np.ndarray: Time range delta(s) corresponding to the input time ranges.
+        """
+        t_start, t_end = np.atleast_1d(
+            t_start), np.atleast_1d(t_end)
+        assert (
+                t_start.shape == t_end.shape
+        ), "Start and end times must have the same shape."
+        assert (
+            np.all(t_start >= 0) or np.all(t_end >= 0)
+        ), "Negative times detected."
+
+        max_x = lookup_table.shape[0] - 1
+        t_start = np.clip(t_start, 0, max_x) if np.any(t_start > max_x) else t_start
+        t_end = np.clip(t_end, 0, max_x) if np.any(t_end > max_x) else t_end
+
+        cdf1, cdf2 = np.zeros(t_start.shape), np.ones(t_end.shape)
+        valid_mask = (t_start <= t_end) 
+
+        cdf1[valid_mask] = lookup_table[t_start[valid_mask].astype(int)]
+        cdf2[valid_mask] = lookup_table[t_end[valid_mask].astype(int)]
+
+        return cdf2 - cdf1 if cdf2.size > 1 else cdf2[0] - cdf1[0]
+
+    def get_entry_dis(
+            self,
+            path_id: int,
+            times_start: int | np.ndarray | pd.Series,
+            times_end: int | np.ndarray | pd.Series,
     ) -> float | np.ndarray:
         """
         Retrieve entry CDF values for the given path_id and time ranges.
@@ -246,31 +287,24 @@ class WalkTimeDisCalculator:
         """
         entry_pp_id = self.path_id2entry_pp_id.get(path_id, None)
         assert (
-            entry_pp_id is not None
+                entry_pp_id is not None
         ), f"Entry physical platform ID not found for path {path_id}."
 
-        lookup_table = self.pp_id2cdf_table.get(entry_pp_id, 1)
+        lookup_table = self.pp_id2cdf_table.get(entry_pp_id, None)
         assert (
-            lookup_table is not None
+                lookup_table is not None
         ), f"No lookup table found for entry pp_id {entry_pp_id}."
 
-        times_start, times_end = np.atleast_1d(times_start), np.atleast_1d(times_end)
-        assert (
-            times_start.shape == times_end.shape
-        ), "Start and end times must have the same shape."
-
-        cdf1, cdf2 = np.ones(times_start.shape), np.ones(times_end.shape)
-        valid_mask = (times_start >= 0) & (times_end >= 0) & (times_start <= times_end)
-        cdf1[valid_mask] = lookup_table[times_start[valid_mask].astype(int)]
-        cdf2[valid_mask] = lookup_table[times_end[valid_mask].astype(int)]
-        return cdf2 - cdf1 if cdf2.size > 1 else cdf2[0] - cdf1[0]
+        return self._lookup_time_range_deltas(
+            lookup_table, times_start, times_end
+        )
 
     def get_transfer_dis(
-        self,
-        path_id: int,
-        seg_id: int,
-        times_start: int | np.ndarray | pd.Series,
-        times_end: int | np.ndarray | pd.Series,
+            self,
+            path_id: int,
+            seg_id: int,
+            times_start: int | np.ndarray | pd.Series,
+            times_end: int | np.ndarray | pd.Series,
     ) -> float | np.ndarray:
         """
         Retrieve transfer CDF values for the given path_id, seg_id, and time ranges.
@@ -286,36 +320,31 @@ class WalkTimeDisCalculator:
             float or np.ndarray: CDF value(s) corresponding to the input time ranges.
         """
         rows = (self.path_seg2pp_id_mima["path_id"] == path_id) & (
-            self.path_seg2pp_id_mima["seg_id"] == seg_id
+                self.path_seg2pp_id_mima["seg_id"] == seg_id
         )
-        pp_ids = self.path_seg2pp_id_mima.loc[rows, ["pp_id_min", "pp_id_max"]].values
+        pp_ids = self.path_seg2pp_id_mima.loc[rows, [
+            "pp_id_min", "pp_id_max"]].values
         assert (
-            pp_ids.size == 2
+                pp_ids.size == 2
         ), f"No or multiple pp_ids found for path {path_id} and segment {seg_id}."
 
         lookup_table = self.transfer_mima2cdf_table.get(
             (int(pp_ids[0][0]), int(pp_ids[0][1])), None
         )
         assert (
-            lookup_table is not None
+                lookup_table is not None
         ), f"No lookup table found for pp_id_min={pp_ids[0][0]}, pp_id_max={pp_ids[0][1]}"
 
-        times_start, times_end = np.atleast_1d(times_start), np.atleast_1d(times_end)
-        assert (
-            times_start.shape == times_end.shape
-        ), "Start and end times must have the same shape."
-
-        cdf1, cdf2 = np.ones(times_start.shape), np.ones(times_end.shape)
-        valid_mask = (times_start >= 0) & (times_end >= 0) & (times_start <= times_end)
-        cdf1[valid_mask] = lookup_table[times_start[valid_mask].astype(int)]
-        cdf2[valid_mask] = lookup_table[times_end[valid_mask].astype(int)]
-        return cdf2 - cdf1 if cdf2.size > 1 else cdf2[0] - cdf1[0]
+        return self._lookup_time_range_deltas(
+            lookup_table, times_start, times_end
+        )
 
 
-def test_one_feas_iti():
-    config.load_config()
-    from src.utils import read_
+def _test_feas_iti_dis_calculate():
+    from src.utils import read_, ts2tstr
     from src.globals import get_afc
+
+    _ts2tstr = lambda x: ts2tstr(x, include_seconds=True)
 
     wtdc = WalkTimeDisCalculator()
 
@@ -325,33 +354,42 @@ def test_one_feas_iti():
     iti_id = np.random.choice(df_left[df_left["rid"] == rid]["iti_id"].values, size=1)[
         0
     ]
-    rid, iti_id = 950850, 26  # manual set
-    print(f"rid: {rid}. iti_id: {iti_id}.")
+    rid, iti_id = 895211, 1  # manual set
+    print(f"rid, iti_id: {rid}, {iti_id}")
 
     df = df_left[(df_left["rid"] == rid) & (df_left["iti_id"] == iti_id)]
     print(df)
     path_id = df["path_id"].values[0]
 
     rid, uid1, ts1, uid2, ts2 = get_afc()[get_afc()[:, 0] == rid][0]
-    print(rid, uid1, ts1, uid2, ts2)
+    print("AFC info: ", rid, uid1, ts1, uid2, ts2)
 
     entry_dis = wtdc.get_entry_dis(path_id, 0, df.iloc[0, 5] - ts1)
+    print(
+        f"entry  : "
+        f"{_ts2tstr(ts1)} -> {_ts2tstr(df.iloc[0, 5])} "
+        f"({df.iloc[0, 5] - ts1:4}) "
+        f"| {entry_dis:.6f}")
     egress_dis = wtdc.get_egress_dis(path_id, ts2 - df.iloc[-1, 6])
     # transfer_dis = wtdc.get_transfer_dis(path_id, seg_id, 0, df.iloc[1:-1, 5] - ts1)
     for i in range(len(df) - 1):
-        if i == 0:
-            prev_ts = ts1
-        else:
-            prev_ts = df.iloc[i - 1, 6]
-        print(path_id, df.iloc[i, 3], prev_ts, df.iloc[i, 5], end=" | ")
         transfer_dis = wtdc.get_transfer_dis(
-            path_id, df.iloc[i, 3], 0, df.iloc[i, 5] - prev_ts
+            path_id, df.iloc[i, 3], 0, df.iloc[i + 1, 5] - df.iloc[i, 6]
         )
-        print(transfer_dis)
+        print(
+            f"trans {df.iloc[i, 3]}: "
+            f"{_ts2tstr(df.iloc[i, 6])} -> {_ts2tstr(df.iloc[i + 1, 5])} "
+            f"({df.iloc[i + 1, 5] - df.iloc[i, 6]:4}) "
+            f"| {transfer_dis:.6f}")
 
-    print(entry_dis, egress_dis)
+    print(
+        f"egress : "
+        f"{_ts2tstr(df.iloc[-1, 6])} -> {_ts2tstr(ts2)} "
+        f"({ts2 - df.iloc[-1, 6]:4}) "
+        f"| {egress_dis:.6f}")
 
 
 if __name__ == "__main__":
     config.load_config()
+    _test_feas_iti_dis_calculate()
     pass
