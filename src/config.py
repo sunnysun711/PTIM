@@ -6,6 +6,48 @@ import yaml
 CONFIG: dict = {}
 
 
+def determine_results_subfolder(fn: str) -> str:
+    """
+    Determines the subfolder for results files based on the file name.
+    """
+    if fn in [
+        CONFIG["results"]["node"],
+        CONFIG["results"]["link"],
+        CONFIG["results"]["platform"],
+        CONFIG["results"]["path"],
+        CONFIG["results"]["pathvia"],
+    ]:
+        return CONFIG["results_subfolder"]["network"]
+
+    elif fn in [
+        CONFIG["results"]["feas_iti"],
+        CONFIG["results"]["AFC_no_iti"],
+    ]:
+        return CONFIG["results_subfolder"]["itinerary"]
+
+    elif fn in [
+        CONFIG["results"]["assigned"],
+        CONFIG["results"]["left"],
+        CONFIG["results"]["stashed"],
+    ]:
+        return CONFIG["results_subfolder"]["trajectory"]
+
+    elif fn in [
+        CONFIG["results"]["egress_times"],
+        CONFIG["results"]["etd"],
+    ]:
+        return CONFIG["results_subfolder"]["egress"]
+
+    elif fn in [
+        CONFIG["results"]["transfer_times"],
+        CONFIG["results"]["ttd"],
+    ]:
+        return CONFIG["results_subfolder"]["transfer"]
+
+    else:
+        raise ValueError(f"Unknown file to determine results subfolder: {fn}")
+
+
 def check_data_presence(config: dict):
     """Check if the required data files exist in the data folder."""
     files = os.listdir(config['data_folder'])
@@ -41,17 +83,21 @@ def check_used_results(config: dict):
     if config['use_existing']["network"]:
         check_file_exists(config, config["results_subfolder"]["network"], "node")
         check_file_exists(config, config["results_subfolder"]["network"], "link")
-
-    if config['use_existing']["path"]:
-        check_file_exists(config, config["results_subfolder"]["path"], "path")
-        check_file_exists(config, config["results_subfolder"]["path"], "pathvia")
-
+        check_file_exists(config, config["results_subfolder"]["network"], "platform")
+        check_file_exists(config, config["results_subfolder"]["network"], "path")
+        check_file_exists(config, config["results_subfolder"]["network"], "pathvia")
+        pass
+        
     if config['use_existing']["itinerary"]:
         check_file_exists(config, config["results_subfolder"]["itinerary"], "feas_iti")
+        # check_file_exists(config, config["results_subfolder"]["itinerary"], "AFC_no_iti")  # potentially not needed
+        pass
 
     if config['use_existing']["trajectory"]:
         check_file_exists(config, config["results_subfolder"]["trajectory"], "left")
         check_file_exists(config, config["results_subfolder"]["trajectory"], "stashed")
+        # check_file_exists(config, config["results_subfolder"]["trajectory"], "assigned")  # not yet implemented for auto index files
+        pass
 
 
 def check_file_exists(config: dict, subfolder: str, result_key: str):

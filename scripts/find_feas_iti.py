@@ -3,15 +3,8 @@ This script executes the full pipeline for passenger itinerary generation and ca
 based on k-shortest path and train timetable data.
 
 Key Steps:
-1. find_feas_iti_all:
-    - Generates feas_iti.pkl: All feasible itineraries for passengers.
-    - Outputs AFC_no_iti.pkl: Records without feasible paths.
-2. _plot_check_feas_iti:
-    - Visual debug utility to visualize feasible trains for a single passenger.
-
-Usage:
-- Run main() to generate itineraries.
-- Optionally use _plot_check_feas_iti() to inspect specific cases.
+1. Generates feas_iti.pkl: All feasible itineraries for passengers.
+2. Outputs AFC_no_iti.pkl: Records without feasible paths.
 
 Dependencies:
 - src.passenger
@@ -28,31 +21,6 @@ import time
 import numpy as np
 
 from src import config
-
-
-def _plot_check_feas_iti(rid: int = None):
-    """Test function for feasible itineraries found."""
-    from src.passenger import plot_seg_trains, find_feas_iti
-    from src.globals import get_afc, get_k_pv_dict
-
-    afc = get_afc()
-    k_pv_dict = get_k_pv_dict()
-
-    if rid is None:
-        rid, uid1, ts1, uid2, ts2 = afc[np.random.choice(len(afc))].flatten().tolist()
-    else:
-        rid, uid1, ts1, uid2, ts2 = afc[afc[:, 0] == rid].flatten().tolist()
-    # ts1, ts2 = 20000, 23000
-    print(rid, uid1, uid2, ts1, ts2)
-
-    k_pv = k_pv_dict[(uid1, uid2)]
-    print(k_pv)
-
-    iti_list = find_feas_iti(k_pv, ts1, ts2)
-    print(len(iti_list))
-
-    plot_seg_trains(k_pv, ts1, ts2)
-    return
 
 
 def main():

@@ -28,6 +28,7 @@ from joblib import Parallel, delayed
 from tqdm import tqdm
 
 from src import config
+from src.globals import get_platform_exceptions, get_node_info
 from src.utils import read_, save_
 
 
@@ -37,7 +38,7 @@ def gen_node_from_sta(save_on: bool = False) -> pd.DataFrame:
     UID is used for ground surfaces, NID * 10 + 0 is for downward platform, NID * 10 + 1 is for upward platform.
 
     :param save_on: Whether to save the result to a file. Default is False.
-    :return: Dataframe with columns ('STATION_NID', 'STATION_UID', 'IS_TRANSFER', 'IS_TERMINAL', 'LINE_NID') and
+    :return: Dataframe with columns ('STATION_NID', 'STATION_UID', 'IS_TRANSFER', 'IS_TERMINAL', 'LINE_NID', 'updown') and
         index ('node_id').
     """
     df = read_(fn="STA", show_timer=False).reset_index()
@@ -157,10 +158,9 @@ def gen_walk_links_from_nodes(
         Defaults to None, means generated from `read_("platform.json")`.
     :return: Dataframe of columns ['node_id1', 'node_id2', 'link_type', 'link_weight'].
     """
-    platform_exceptions = read_("platform.json",
-                                show_timer=False) if platform_exceptions is None else platform_exceptions
+    platform_exceptions = get_platform_exceptions() if platform_exceptions is None else platform_exceptions
     # print(platform_exceptions)
-    nodes = read_(fn="node_info", show_timer=False).dropna(subset=["LINE_NID"]) if nodes is None else nodes
+    nodes = get_node_info().dropna(subset=["LINE_NID"]).set_index("node_id") if nodes is None else nodes
 
     links = []  # [node_id1, node_id2, link_type, link_weight]
 
@@ -234,6 +234,39 @@ def gen_links(platform_swap_time: float = 3,
     if save_on:
         save_(fn=config.CONFIG["results"]["link"], data=all_links, auto_index_on=False)
     return all_links
+
+
+def gen_platforms() -> pd.DataFrame:
+    """Generate physical platforms from the exceptions provided in platform.json and the default rules
+    that node_ids sharing the same LINE_NID use the same physical platform.
+        
+    The physical platform id is generated as id + uid * 100, where uid is the station uid.
+    
+    Returns:
+        pd.DataFrame: Dataframe with columns ['physical_platform_id', 'node_id', 'uid'].
+    """
+    platform_excep = get_platform_exceptions()
+    nodes = get_node_info().dropna(subset=["LINE_NID"])[["node_id", "STATION_UID", "LINE_NID"]].set_index("node_id")  # excluding ground nodes
+    
+    data = []  # [uid, physical_platform_id, node_id] 
+    for uid in range(1001, 1137):
+        physical_platform_id = 1 + uid * 100
+        if uid in platform_excep:
+            platforms = platform_excep[uid]
+            for platform in platforms:
+                for node_id in platform:
+                    data.append([physical_platform_id, node_id, uid])
+                physical_platform_id += 1
+        else:
+            lines = nodes[nodes["STATION_UID"] == uid]["LINE_NID"].unique()
+            for line in lines:
+                node_ids = nodes[(nodes["STATION_UID"] == uid) & (nodes["LINE_NID"] == line)].index
+                for node_id in node_ids:
+                    data.append([physical_platform_id, node_id, uid])
+                physical_platform_id += 1
+                
+    res = pd.DataFrame(data, columns=["physical_platform_id", "node_id", "uid"])
+    return res
 
 
 class ChengduMetro:
@@ -625,6 +658,8 @@ class ChengduMetro:
         :param theta2: Parameter for path selection. Default to 600.
         :param transfer_deviation: Transfer deviation from the trans_cnt of shortest_path. Default to 2.
         :return: Path and pathvia dataframes.
+            Path dataframe columns: ["path_id", "length", "transfer_cnt", "path_str"]
+            Pathvia dataframe columns: ["path_id", "pv_id", "node_id1", "node_id2", "link_type", "line", "updown"]
         """
         path_list: list[list] = []
         pathvia_list: list[list] = []
@@ -685,6 +720,8 @@ class ChengduMetro:
         :param transfer_deviation: Max allowed deviation in transfer count.
         :param n_jobs: Number of parallel workers. -1 means using all processors.
         :return: Path and pathvia dataframes.
+            Path dataframe columns: ["path_id", "length", "transfer_cnt", "path_str"]
+            Pathvia dataframe columns: ["path_id", "pv_id", "node_id1", "node_id2", "link_type", "line", "updown"]
         """
         uid_list = self._get_uids()  # all ground nodes
         print(f"[INFO] Start finding K-shortest paths using {n_jobs} threads...")
