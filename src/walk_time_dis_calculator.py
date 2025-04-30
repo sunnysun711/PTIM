@@ -194,9 +194,11 @@ class WalkTimeDisCalculator:
             )
 
     def get_egress_dis(
-            self,
-            path_id: int,
-            times: int | np.ndarray | pd.Series,
+        self,
+        path_id: int,
+        times: int | np.ndarray | pd.Series,
+        ratio_: bool = True,
+        square_: bool = False,
     ) -> float | np.ndarray:
         """
         Retrieve egress PDF values for the given path_id and times.
@@ -205,6 +207,8 @@ class WalkTimeDisCalculator:
         Args:
             path_id (int): Path ID to retrieve the egress distribution.
             times (int | np.ndarray | pd.Series): Time(s) to retrieve PDF values.
+            ratio_ (bool): Whether to return the ratio of the PDF to the max PDF value. Default is True.
+            square_ (bool): Whether to square the output values. Default is True.
 
         Returns:
             float or np.ndarray: PDF value(s) corresponding to the input time(s).
@@ -226,6 +230,10 @@ class WalkTimeDisCalculator:
 
         output = np.zeros(times.shape)
         output[valid_mask] = lookup_table[times[valid_mask].astype(int)]
+        if ratio_:
+            output /= np.max(lookup_table)
+        if square_:
+            output **= 2
 
         return output if output.size > 1 else output[0]
 
@@ -259,8 +267,8 @@ class WalkTimeDisCalculator:
         t_start = np.clip(t_start, 0, max_x) if np.any(t_start > max_x) else t_start
         t_end = np.clip(t_end, 0, max_x) if np.any(t_end > max_x) else t_end
 
-        cdf1, cdf2 = np.zeros(t_start.shape), np.ones(t_end.shape)
-        valid_mask = (t_start <= t_end) 
+        cdf1, cdf2 = np.ones(t_start.shape), np.ones(t_end.shape)
+        valid_mask = t_start <= t_end
 
         cdf1[valid_mask] = lookup_table[t_start[valid_mask].astype(int)]
         cdf2[valid_mask] = lookup_table[t_end[valid_mask].astype(int)]
