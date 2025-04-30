@@ -173,10 +173,10 @@ class WalkTimeDisCalculator:
             .drop_duplicates()
             .values
         ):
-            if pp_id_min == pp_id_max:  # platform swap detected, all set to one.
-                self.transfer_mima2cdf_table[(int(pp_id_min), int(pp_id_max))] = (
-                    np.ones(501)
-                )
+            if pp_id_min == pp_id_max:  # platform swap, all set to one (except location zero).
+                _ = np.ones(501)
+                _[0] = 0
+                self.transfer_mima2cdf_table[(int(pp_id_min), int(pp_id_max))] = _
                 continue
 
             ttd_filtered = self.ttd[
