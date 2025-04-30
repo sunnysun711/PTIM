@@ -201,8 +201,9 @@ def plot_seg_trains(k_pv: np.ndarray, ts1: int, ts2: int):
         axs = [axs]  # Make sure axs is iterable even if there's only one subplot
 
     # Calculate xticks (every 10 minutes between ts1 and ts2)
-    xticks = list(range(ts1 // 600 * 600 + 600, ts2 // 600 *
-                  600 + 600, 600))  # 600 seconds = 10 minutes
+    xtick_width = 120
+    xticks = list(range(ts1 // xtick_width * xtick_width + xtick_width, ts2 // xtick_width *
+                  xtick_width + xtick_width, xtick_width))
     xticklabels = [ts2tstr(t, include_seconds=False) for t in xticks]
 
     # Add ts1 and ts2 to the xticks list and labels
@@ -435,7 +436,7 @@ def find_feas_iti_all_parallel(save_feas_iti: bool = True, save_afc_no_iti: bool
     return df
 
 
-def _plot_check_feas_iti(rid: int = None):
+def _plot_check_feas_iti(rid: int = None, print_on:bool=True):
     """Test function for feasible itineraries found."""
     from src.passenger import plot_seg_trains, find_feas_iti
     from src.globals import get_afc, get_k_pv_dict
@@ -449,13 +450,16 @@ def _plot_check_feas_iti(rid: int = None):
     else:
         rid, uid1, ts1, uid2, ts2 = afc[afc[:, 0] == rid].flatten().tolist()
     # ts1, ts2 = 20000, 23000
-    print(rid, uid1, uid2, ts1, ts2)
 
     k_pv = k_pv_dict[(uid1, uid2)]
-    print(k_pv)
+    
 
     iti_list = find_feas_iti(k_pv, ts1, ts2)
-    print(len(iti_list))
+    
+    if print_on:
+        print(rid, uid1, uid2, ts1, ts2)
+        print(k_pv)
+        print(len(iti_list))
 
     plot_seg_trains(k_pv, ts1, ts2)
     return
@@ -463,4 +467,4 @@ def _plot_check_feas_iti(rid: int = None):
 
 if __name__ == '__main__':
     config.load_config()
-    _plot_check_feas_iti(rid=895211)
+    _plot_check_feas_iti(rid=None)
