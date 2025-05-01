@@ -180,7 +180,7 @@ def get_path_seg_to_pp_ids():
     Get path_id, seg_id to physical platform IDs mapping dataframe.
     
     :return: DataFrame with 5 columns:
-        ["path_id", "seg_id", "pp_id1", "pp_id2", "transfer_type"]
+        ["path_id", "seg_id", "transfer_type", "pp_id1", "pp_id2"]
     """
     k_pv_ = get_k_pv()[:, :-2]
     df = pd.DataFrame(k_pv_, columns=["path_id", "pv_id", "node1", "node2", "link_type"])

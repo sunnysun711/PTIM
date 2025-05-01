@@ -806,3 +806,10 @@ class ChengduMetro:
                     break
 
         return path_list, pathvia_list
+    
+    
+if __name__ == "__main__":
+    config.load_config()
+    net = ChengduMetro(nodes=gen_node_from_sta(), links=gen_links())
+    net.plot_metro_net(coordinates=read_("coordinates.csv", show_timer=False))
+    pass

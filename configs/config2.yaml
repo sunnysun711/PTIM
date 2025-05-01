@@ -9,29 +9,35 @@ data:
 results_folder: "results"
 results_subfolder:
   network: "network"
-  path: "path"
   itinerary: "itinerary"
-  egress: "egress"
   trajectory: "trajectory"
+  egress: "egress"
+  transfer: "transfer"
 results:
-  node: "node_info.pkl"
-  link: "link_info.pkl"
-  path: "path.pkl"
-  pathvia: "pathvia.pkl"
-  feas_iti: "feas_iti.pkl"
-  AFC_no_iti: "AFC_no_iti.pkl"
-  egress_times: "egress_times.pkl"  # auto index
-  etd: "etd.pkl"  # columns: [pl_id, x, kde_pdf, kde_cdf, kde_ks_stat, kde_ks_p_value, gamma_pdf, gamma_cdf, gamma_ks_stat, gamma_ks_p_value, lognorm_pdf, lognorm_cdf, lognorm_ks_stat, lognorm_ks_p_value]
-  physical_links: "physical_links.csv"  # columns: [`pl_id`, `platform_id`, `uid`]
-  assigned: "assigned.pkl"  # auto index
-  left: "left.pkl"
-  stashed: "stashed.pkl"
+  # network:
+  node: "node.csv" # [node_id, STATION_NID, STATION_UID, IS_TRANSFER, IS_TERMINAL, LINE_NID]
+  link: "link.csv" # [node_id1, node_id2, link_type, link_weight]
+  platform: "platform.csv" # [uid, platform_id, node_id]
+  path: "path.pkl" # [path_id, length, transfer_cnt, path_str]
+  pathvia: "pathvia.pkl" # [path_id, pv_id, node_id1, node_id2, link_type, line, updown]
+  # itinerary:
+  feas_iti: "feas_iti.pkl" # [rid, iti_id, path_id, seg_id, train_id, board_ts, alight_ts]
+  AFC_no_iti: "AFC_no_iti.pkl" # [rid, uid1, ts1, uid2, ts2]
+  # trajectory:
+  assigned: "assigned.pkl" # file auto index [rid, iti_id, path_id, seg_id, train_id, board_ts, alight_ts]
+  left: "left.pkl" # [rid, iti_id, path_id, seg_id, train_id, board_ts, alight_ts]
+  stashed: "stashed.pkl" # [rid, iti_id, path_id, seg_id, train_id, board_ts, alight_ts]
+  # egress:
+  egress_times: "egress_times.pkl" # file auto index [rid (index), physical_platform_id, alight_ts, egress_time]
+  etd: "etd.csv" # file auto index [pp_id, x, kde_pdf, kde_cdf, kde_ks_stat, kde_ks_p_value, gamma_pdf, gamma_cdf, gamma_ks_stat, gamma_ks_p_value, lognorm_pdf, lognorm_cdf, lognorm_ks_stat, lognorm_ks_p_value]
+  # transfer:
+  transfer_times: "transfer_times.pkl" # file auto index [rid(index), path_id, seg_id, pp_id1, pp_id2, alight_ts, transfer_time, transfer_type]
+  ttd: "ttd.csv" # columns: [pp_id1, pp_id2, kde_pdf, kde_cdf, kde_ks_stat, kde_ks_p_value]
 
 figure_folder: "figures"
 
 use_existing:
   network: false
-  path: false
   itinerary: false
   trajectory: false
 
@@ -62,7 +68,7 @@ parameters:
   TRAIN_B_AREA: 197.5
   TRAIN_A_SEAT: 240
   TRAIN_A_AREA: 265
-  STD_DENSITY: 6.57
-  STD_DENSITY_COMMUTER: 8.45
+  STD_NORMAL: 6.57
+  STD_COMMUTER: 8.45
 
 

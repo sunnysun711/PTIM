@@ -1,0 +1,151 @@
+# calculate itinerary probabilities, save in iti_prob_*.pkl
+import numpy as np
+import pandas as pd
+
+from src import config
+from src.utils import read_, read_all
+from src.globals import get_k_pv, get_platform, get_afc
+from src.walk_time_filter import get_path_seg_to_pp_ids
+from src.walk_time_dis_calculator import WalkTimeDisModel
+
+# Preload AFC timestamps dataframe
+AFC_TS = pd.DataFrame(get_afc()[:, [0, 2, 4]], columns=[
+    "rid", "ts1", "ts2"]).set_index("rid")
+
+
+def cal_entry_dis_all(wtdc: WalkTimeDisModel = None, left: pd.DataFrame = None):
+    """
+    Calculate the entry walk distribution for all itineraries in `left`.
+
+    Args:
+        wtdc (WalkTimeDisCalculator, optional): WalkTimeDisCalculator instance.
+            Defaults to None (automatically created with the latest etd, ttd CSV files).
+        left (pd.DataFrame, optional): DataFrame of left itineraries.
+            Defaults to None (read from left.pkl file).
+            Expected columns: ['rid', 'iti_id', 'path_id', 'seg_id', 'train_id', 'board_ts', 'alight_ts']
+
+    Returns:
+
+    """
+    if wtdc is None:
+        print("[INFO] Initializing WalkTimeDisCalculator for cal_entry_dis()...")
+        wtdc = WalkTimeDisModel(etd=get_etd(), ttd=get_ttd())
+    if left is None:
+        left = read_(config.CONFIG["results"]["left"])
+
+    # Extract first segment per itinerary
+    left_first_seg = left[left["seg_id"] == 1][[
+        "rid", "iti_id", "path_id", "board_ts"]].copy()
+
+    # Map path_id → entry platform physical platform id (pp_id)
+    k_pv = get_k_pv()[:, :4]  # ["path_id", "pv_id", "node_id1", "node_id2"]
+    entry_ids = np.where(k_pv[:, 1] == 1)[0]
+    path_entry = k_pv[entry_ids][:, [0, -1]]  # [path_id, node_id (platform)]
+
+    node_id2pp_id = {i: j for j, i, _ in get_platform()}
+    path_entry_pp_id = np.hstack([path_entry, np.vectorize(
+        node_id2pp_id.get)(path_entry[:, 1]).reshape(-1, 1)])
+    path_id2entry_pp_id = {path_id: entry_pp_id for path_id,
+                           entry_pp_id in path_entry_pp_id[:, [0, 2]]}
+
+    # Map entry physical platform id
+    left_first_seg["entry_pp_id"] = left_first_seg["path_id"].map(
+        path_id2entry_pp_id)
+
+    # Calculate entry times relative to AFC tap-in times
+    left_first_seg["ts1"] = left_first_seg["rid"].map(AFC_TS["ts1"])
+    left_first_seg["entry_time"] = left_first_seg["board_ts"] - \
+        left_first_seg["ts1"]
+
+    # Calculate entry walk distribution for each physical platform group
+    left_first_seg["dis"] = 0.0  # to be filled
+    for entry_pp_id, df_ in left_first_seg.groupby("entry_pp_id"):
+        print(entry_pp_id, df_.shape)
+        df_["dis"] = wtdc.compute_entry_cdf_from_pp(pp_id=entry_pp_id, times_start=np.zeros(
+            df_.shape[0]), times_end=df_["entry_time"].values)
+        left_first_seg.loc[df_.index, "dis"] = df_["dis"].values
+
+    # columns of left_first_seg: [rid, iti_id, path_id, board_ts, entry_pp_id, ts1, entry_time, dis]
+    # TODO: return dict {(rid, iti_id): dis} or other structure as needed
+    ...
+
+
+def cal_egress_dis_all(wtdc: WalkTimeDisModel = None, left: pd.DataFrame = None):
+    """
+    Calculate the egress walk distribution for all left itineraries.
+
+    Args:
+        wtdc (WalkTimeDisCalculator, optional): WalkTimeDisCalculator instance. Defaults to None.
+            If wtdc is None, create a new instance with the lastest etd, ttd csv files.
+        left (pd.DataFrame, optional): left dataframe. Defaults to None.
+            columns are: [rid, iti_id, path_id, seg_id, train_id, board_ts, alight_ts]
+            If left is None, read from the left.pkl file.
+
+    Returns:
+
+    """
+    if wtdc is None:
+        print("[INFO] Initializing WalkTimeDisCalculator for cal_egress_dis()...")
+        wtdc = WalkTimeDisModel(etd=get_etd(), ttd=get_ttd())
+    if left is None:
+        left = read_(config.CONFIG["results"]["left"])
+
+    # Extract last segment per itinerary
+    left_last_seg = left[np.append(left["seg_id"].values[1:] == 1, True)][[
+        "rid", "iti_id", "path_id", "alight_ts"]].copy()
+
+    # Map path_id → egress platform physical platform id (pp_id)
+    k_pv = get_k_pv()[:, :4]  # ["path_id", "pv_id", "node_id1", "node_id2"]
+    egress_ids = np.where(k_pv[:, 1] == 1)[0] - 1
+    path_egress = k_pv[egress_ids][:, [0, -2]]  # [path_id, node_id (platform)]
+
+    node_id2pp_id = {i: j for j, i, _ in get_platform()}
+    path_egress_pp_id = np.hstack([path_egress, np.vectorize(
+        node_id2pp_id.get)(path_egress[:, 1]).reshape(-1, 1)])
+    path_id2egress_pp_id = {path_id: egress_pp_id for path_id,
+                            egress_pp_id in path_egress_pp_id[:, [0, 2]]}
+
+    # Map egress physical platform id
+    left_last_seg["egress_pp_id"] = left_last_seg["path_id"].map(
+        path_id2egress_pp_id)
+    
+    # Calculate egress times relative to AFC tap-out times
+    left_last_seg["ts2"] = left_last_seg["rid"].map(AFC_TS["ts2"])
+    left_last_seg["egress_time"] = left_last_seg["ts2"] - \
+        left_last_seg["alight_ts"]
+
+    # Calculate egress walk distribution for each physical platform group
+    left_last_seg["dis"] = 0.0  # to be filled
+    for egress_pp_id, df_ in left_last_seg.groupby("egress_pp_id"):
+        print(egress_pp_id, df_.shape)
+        df_["dis"] = wtdc.compute_egress_pdf_from_pp(
+            pp_id=egress_pp_id, times=df_["egress_time"].values)
+        left_last_seg.loc[df_.index, "dis"] = df_["dis"].values
+
+    # columns of left_last_seg: [rid, iti_id, path_id, alight_ts, egress_pp_id, ts2, egress_time, dis]
+    # TODO: return dict {(rid, iti_id): dis} or other structure as needed
+    ...
+
+def cal_transfer_dis_all(wtdc: WalkTimeDisModel = None, left: pd.DataFrame = None):
+    """
+    Calculate the transfer walk distribution for all itineraries in `left`.
+
+    Args:
+        wtdc (WalkTimeDisCalculator, optional): WalkTimeDisCalculator instance.
+            Defaults to None (automatically created with the latest etd, ttd CSV files).
+        left (pd.DataFrame, optional): DataFrame of left itineraries.
+            Defaults to None (read from left.pkl file).
+            Expected columns: ['rid', 'iti_id', 'path_id','seg_id', 'train_id', 'board_ts', 'alight_ts']
+
+    Returns:
+
+    """
+    if wtdc is None:
+        print("[INFO] Initializing WalkTimeDisCalculator for cal_transfer_dis()...")
+        wtdc = WalkTimeDisModel(etd=get_etd(), ttd=get_ttd())
+    if left is None:
+        left = read_(config.CONFIG["results"]["left"])
+
+    df_path_seg_pp_ids = get_path_seg_to_pp_ids()  # ["path_id", "seg_id", "pp_id1", "pp_id2", "transfer_type"]
+    
+    ...
