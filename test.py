@@ -81,7 +81,7 @@ def test3():
 
 def test4():
     # try the calculator
-    from src.walk_time_dis_calculator import WalkTimeDisCalculator
+    from src.walk_time_dis_calculator import WalkTimeDisModel
 
     # building test data
     assigned = read_("assigned", latest_=True, show_timer=False)
@@ -100,7 +100,7 @@ def test4():
     print(f"Transfer End Times: {transfer_t_end}")
 
     # Initialize the calculator
-    calculator = WalkTimeDisCalculator()
+    calculator = WalkTimeDisModel()
 
     try:  # egress time PDF calculation
         pdf_values = calculator.egress_time_dis_calculator(path_id, egress_times)
