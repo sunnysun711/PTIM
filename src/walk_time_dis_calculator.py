@@ -441,7 +441,8 @@ def _test_feas_iti_dis_calculate_one_rid(rid: int, plot_seg_trains: bool = True)
     df["prob"] = df["prod"] / df["prod"].sum()
     df["prod2"] = df["entry_cdf"] * df["trans_cdf_prod"] * df["egress_pdf2"]
     df["prob2"] = df["prod2"] / df["prod2"].sum()
-    print(df)
+    # print(df)
+    print(df[df["prob"] > 1e-3])
 
     if plot_seg_trains:
         _plot_check_feas_iti(rid=rid, print_on=False)
@@ -449,6 +450,6 @@ def _test_feas_iti_dis_calculate_one_rid(rid: int, plot_seg_trains: bool = True)
 
 if __name__ == "__main__":
     config.load_config()
-    _test_feas_iti_dis_calculate_one_rid(rid=1723090)
+    _test_feas_iti_dis_calculate_one_rid(rid=None)  # 1723090
 
     pass
