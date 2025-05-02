@@ -169,7 +169,7 @@ def get_transfer_from_feas_iti(df_feas_iti: pd.DataFrame) -> pd.DataFrame:
     # delete (rid, iti_id) with only one seg
     seg_count = df_feas_iti.groupby(['rid', 'iti_id'])[
         'seg_id'].transform('nunique')
-    df = df_feas_iti[seg_count > 1].copy()
+    df = df_feas_iti.loc[seg_count > 1].copy()
 
     # find rows that need to combine next row's board_ts
     df['next_index'] = df.groupby(
@@ -178,17 +178,14 @@ def get_transfer_from_feas_iti(df_feas_iti: pd.DataFrame) -> pd.DataFrame:
     # calculate transfer time
     df["next_board_ts"] = df["board_ts"].shift(-1)
     df = df[df["next_index"]]
-    df["transfer_time"] = (df["next_board_ts"] -
-                           df["alight_ts"]).astype(int)
+    df["next_board_ts"] = df["next_board_ts"].astype(int)
+    df["transfer_time"] = df["next_board_ts"] - df["alight_ts"]
 
     # get essential data
-    res = df.rename(
-        columns={"next_board_ts": "board_ts"}
-    )[[
-        "rid", "iti_id", "path_id", "seg_id", "alight_ts", "board_ts", "transfer_time"
-    ]]
+    df.drop(columns=["board_ts", "train_id", "next_index"], inplace=True)
+    df.rename(columns={"next_board_ts": "board_ts"}, inplace=True)
 
-    return res
+    return df
 
 
 def get_transfer_from_assigned() -> pd.DataFrame:

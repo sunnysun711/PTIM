@@ -131,14 +131,14 @@ def find_overload_train_section(assigned: pd.DataFrame = None) -> dict[int, np.n
     Find the overload train, section pairs.
 
     Args:
-        assigned (pd.DataFrame, optional): assigned dataframe. Defaults to None.
-            columns are: [rid, iti_id, path_id, seg_id, train_id, board_ts, alight_ts]
+        assigned (pd.DataFrame, optional): assigned dataframe. Defaults to None. \n
+            columns are: [`rid`, `iti_id`, `path_id`, `seg_id`, `train_id`, `board_ts`, `alight_ts`]
 
     Returns:
-        dict[int, np.ndarray]: Dictionary mapping train_id to np.ndarray, 
-            columns are: ['sta1_nid', 'dep_ts','sta2_nid', 'arr_ts', 'load']
-            where 'load' is the number of passengers on the train in the section.
-            Only overloaded train_id will be included in the dictionary.
+        dict[int, np.ndarray]: Dictionary mapping train_id to np.ndarray, \n
+            columns are: [`sta1_nid`, `dep_ts`, `sta2_nid`, `arr_ts`, `load`] \n
+            where `load` is the number of passengers on the train in the section. \n
+            Only overloaded train_id will be included in the dictionary. \n
             Only overloaded sections will be included in the np.ndarray.
     """
     if assigned is None:

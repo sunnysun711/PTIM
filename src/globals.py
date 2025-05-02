@@ -181,7 +181,7 @@ def get_platform_exceptions() -> dict[int, list[list[int]]]:
 
 def get_platform() -> np.ndarray:
     """
-    Get global variable PLATFORM.
+    Get global variable PLATFORM. ["physical_platform_id", "node_id", "uid"]
     If PLATFORM is not initialized, read from platform.csv and store in PLATFORM.
     :return: Array of shape (n, 3) with columns:
         ["physical_platform_id", "node_id", "uid"].
@@ -194,10 +194,12 @@ def get_platform() -> np.ndarray:
 
 def get_etd() -> np.ndarray:
     """
-    Get global variable ETD.
-    If ETD is not initialized, read from the latest version of etd.pkl and store in ETD.
-    :return: Array of shape (n, 4) with columns:
-        ['pp_id', 'x', 'pdf', 'cdf']
+    Get global variable ETD. ['pp_id', 'x', 'pdf', 'cdf']. 
+    
+    If ETD is not initialized, read from the latest version of the etd files.
+
+    Returns: 
+        np.ndarray: Array of shape (n, 4) with columns: ['pp_id', 'x', 'pdf', 'cdf'] \n
         where `pp_id` is the physical platform ID, `x` is egress time index (0-500).
     """
     global ETD
@@ -213,11 +215,14 @@ def get_etd() -> np.ndarray:
 
 def get_ttd() -> np.ndarray:
     """
-
-    :return: Array of shape (n, 4) with columns:
-        ['pp_id_min', 'pp_id_max', 'x', 'cdf']
-        where `pp_id_min` and `pp_id_max` are the min and max platform_uids of the two platforms involved in the transfer,
-        `x` is the transfer time index (0-500), and `cdf` is the cumulative distribution function.
+    Get global variable TTD. ['pp_id_min', 'pp_id_max', 'x', 'cdf']
+    
+    If TTD is not initialized, read from the latest version of the ttd files.
+    
+    Returns: 
+        np.ndarray: Array of shape (n, 4) with columns: ['pp_id_min', 'pp_id_max', 'x', 'cdf'] \n
+        where `pp_id_min` and `pp_id_max` are the min and max platform_uids of the two platforms involved in the transfer, \n
+        `x` is the transfer time index (0-500), and `cdf` is the cumulative distribution function. \n
         Note that for platform_swap transfers, x only has one value as zero.
     """
     global TTD
