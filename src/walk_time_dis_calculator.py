@@ -1,41 +1,58 @@
 """
 walk_time_dis_calculator.py
 
-A module for efficient and scalable calculation of walking time distributions
-in metro systems, including entry, egress, and transfer scenarios.
+A module for efficient and scalable computation of walking time distributions
+in metro systems, covering entry, egress, and transfer scenarios.
 
-This module defines the `WalkTimeDisCalculator` class, which provides methods
-to compute probability distribution values (PDF/CDF) for walking times, given
-a passenger's travel path and segment. The distributions are preloaded and
-cached for fast lookup, supporting both scalar and batch queries.
+This module defines the `WalkTimeDisModel` class, which provides methods to
+retrieve probability distribution values (PDF/CDF) for walking times based
+on a passenger's travel path and segment. All distribution data is preloaded
+into lookup tables for fast, vectorized access.
 
 Key Features:
 -------------
-- Calculates:
+- Computes:
     - Egress time probability density function (PDF)
     - Entry time cumulative distribution function (CDF)
     - Transfer time cumulative distribution function (CDF)
-- Uses NumPy arrays and lookup tables for high-performance vectorized access
-- Supports platform-specific data exceptions (e.g., TaiPingYuan)
+- Uses NumPy arrays and precomputed lookup tables for high-performance querying
+- Handles platform-specific exceptions (e.g., special case for TaiPingYuan)
+- Provides access both by physical platform ID and path/segment IDs
 
 Main Class:
 -----------
-- WalkTimeDisCalculator
+- WalkTimeDisModel
 
-    Methods:
-    - get_egress_dis(path_id, times)
-    - get_entry_dis(path_id, t_start, t_end)
-    - get_transfer_dis(path_id, seg_id, t_start, t_end)
+    Key Methods:
+    - compute_egress_pdf(path_id, times, ratio_=True, square_=False): 
+        Retrieve egress PDF for a path at given times
+    - compute_entry_cdf(path_id, t_start, t_end): 
+        Retrieve entry CDF for a path within a time range
+    - compute_transfer_cdf(path_id, seg_id, t_start, t_end): 
+        Retrieve transfer CDF for a path-segment within a time range
+    - compute_egress_pdf_from_pp(pp_id, times, ratio_, square_): 
+        Retrieve egress PDF by platform ID
+    - compute_entry_cdf_from_pp(pp_id, t_start, t_end): 
+        Retrieve entry CDF by platform ID
+    - compute_transfer_cdf_from_pp(pp_id_min, pp_id_max, t_start, t_end): 
+        Retrieve transfer CDF by platform pair
+
+Testing Utilities:
+------------------
+- _test_feas_iti_dis_calculate(rid, iti_id, df_left): 
+    Print and return probability components for a specific itinerary
+- _test_feas_iti_dis_calculate_one_rid(rid, plot_seg_trains=True): 
+    Print and summarize all itineraries for a record ID (optional plotting)
 
 Data Requirements:
 ------------------
 - ETD (Egress Time Distribution): ndarray, shape (N, 4)
-    Each row: [pp_id, x, pdf, cdf]
+    [pp_id, x, pdf, cdf]
 - TTD (Transfer Time Distribution): ndarray, shape (M, 4)
-    Each row: [pp_id_min, pp_id_max, x, cdf]
-- Platform Mapping: get_platform()
-- K-shortest path info: get_k_pv()
-- Transfer segment info: get_path_seg_to_pp_ids()
+    [pp_id_min, pp_id_max, x, cdf]
+- Platform mapping: from get_platform()
+- K-shortest path info: from get_k_pv()
+- Path-segment platform mapping: from get_path_seg_to_pp_ids()
 
 Dependencies:
 -------------
@@ -47,16 +64,16 @@ Dependencies:
     - get_ttd
     - get_k_pv
     - get_platform
-- src.walk_time_filter:
-    - get_path_seg_to_pp_ids
+- src.utils
+- src.walk_time_filter
 
 Usage Example:
 --------------
->>> from walk_time_dis_calculator import WalkTimeDisCalculator
->>> calculator = WalkTimeDisCalculator()
->>> pdf = calculator.get_egress_dis(path_id=1001, times=[10, 20, 30])
->>> cdf = calculator.get_entry_dis(path_id=1001, t_start=5, t_end=25)
->>> cdf_transfer = calculator.get_transfer_dis(path_id=1001, seg_id=2, t_start=10, t_end=35)
+>>> from walk_time_dis_model import WalkTimeDisModel
+>>> model = WalkTimeDisModel()
+>>> pdf = model.compute_egress_pdf(path_id=1001, times=[10, 20, 30])
+>>> cdf = model.compute_entry_cdf(path_id=1001, t_start=5, t_end=25)
+>>> cdf_transfer = model.compute_transfer_cdf(path_id=1001, seg_id=2, t_start=10, t_end=35)
 """
 
 import numpy as np
