@@ -4,7 +4,7 @@ import pandas as pd
 
 from src import config
 from src.utils import read_, read_all
-from src.globals import get_k_pv, get_platform, get_afc
+from src.globals import get_k_pv, get_platform, get_afc, get_etd, get_ttd
 from src.walk_time_filter import get_path_seg_to_pp_ids, get_transfer_from_feas_iti
 from src.walk_time_dis_calculator import WalkTimeDisModel
 
@@ -140,7 +140,7 @@ def cal_transfer_dis_all(wtd: WalkTimeDisModel = None, left: pd.DataFrame = None
 
     Returns:
         pd.DataFrame: DataFrame of transfer walk distribution for all itineraries.
-            columns are: [rid, iti_id, path_id, seg_id, train_id, board_ts, alight_ts, transfer_time, transfer_type, pp_id_min, pp_id_max, dis]
+            columns are: [rid, iti_id, path_id, seg_id, train_id, board_ts, alight_ts, board_ts, transfer_time, transfer_type, pp_id_min, pp_id_max, dis]
     """
     if wtd is None:
         print("[INFO] Initializing WalkTimeDisModel for cal_transfer_dis()...")
@@ -149,7 +149,7 @@ def cal_transfer_dis_all(wtd: WalkTimeDisModel = None, left: pd.DataFrame = None
         left = read_(config.CONFIG["results"]["left"], show_timer=False)
 
     # Extract path segments with transfer
-    # ['rid', 'iti_id', 'path_id', 'seg_id', 'alight_ts', 'transfer_time']
+    # ['rid', 'iti_id', 'path_id', 'seg_id', 'alight_ts', 'board_ts', 'transfer_time']
     df = get_transfer_from_feas_iti(df_feas_iti=left)
 
     # ["path_id", "seg_id", "pp_id1", "pp_id2", "transfer_type"]
@@ -171,5 +171,63 @@ def cal_transfer_dis_all(wtd: WalkTimeDisModel = None, left: pd.DataFrame = None
             times_end=df_["transfer_time"].values
         )
         df.loc[df_.index, "dis"] = dis
-    # columns of df: [rid, iti_id, path_id, seg_id, alight_ts, transfer_time, transfer_type, pp_id_min, pp_id_max, dis]
+    # columns of df: [rid, iti_id, path_id, seg_id, alight_ts, board_ts, transfer_time, transfer_type, pp_id_min, pp_id_max, dis]
     return df
+
+
+def cal_dis_all(wtd: WalkTimeDisModel = None, left: pd.DataFrame = None) -> pd.DataFrame:
+    ""
+    """Calculate the entry, egress, and transfer walk distributions for all itineraries in `left`.
+    Save the results in `iti_prob_*.pkl` files.
+    """
+    if wtd is None:
+        print("[INFO] Initializing WalkTimeDisModel for cal_transfer_dis()...")
+        wtd = WalkTimeDisModel(etd=get_etd(), ttd=get_ttd())
+    if left is None:
+        left = read_(config.CONFIG["results"]["left"], show_timer=False)
+
+    # Calculate entry walk distribution for all itineraries in `left`
+    print("[INFO] Calculating entry walk distribution for all itineraries...")
+    df_ent = cal_entry_dis_all(wtd=wtd, left=left)
+    df_ent["seg_id"] = 0  # set entry seg_id to 0
+    df_ent = df_ent.rename(
+        columns={
+            "ts1": "t1",
+            "board_ts": "t2",
+            "entry_time": "time",
+            "entry_pp_id": "pp_id1"}
+    )[[
+        "rid", 'iti_id', 'path_id', 'seg_id', 't1', 't2', 'pp_id1', 'time', 'dis'
+    ]]
+
+    # Calculate egress walk distribution for all itineraries in `left`
+    print("[INFO] Calculating egress walk distribution for all itineraries...")
+    df_egr = cal_egress_dis_all(wtd=wtd, left=left)
+    df_egr["seg_id"] = -1  # set egress seg_id to -1
+    df_egr = df_egr.rename(
+        columns={
+            "alight_ts": "t1",
+            "ts2": "t2",
+            "egress_time": "time",
+            "egress_pp_id": "pp_id2",
+        }
+    )[[
+        "rid", "iti_id", "path_id", "seg_id", "t1", "t2", "pp_id2", "time", "dis"
+    ]]
+
+    # Calculate transfer walk distribution for all itineraries in `left`
+    print("[INFO] Calculating transfer walk distribution for all itineraries...")
+    df_trans = cal_transfer_dis_all(wtd=wtd, left=left)
+    df_trans = df_trans.rename(
+        columns={
+            "pp_id_min": "pp_id1",
+            "pp_id_max": "pp_id2",
+            "transfer_time": "time",
+            "alight_ts": "t1",
+            "board_ts": "t2"
+        }
+    )[[
+        "rid", "iti_id", "path_id", "seg_id", "t1", "t2", "pp_id1", "pp_id2", "time", "dis"
+    ]]
+    
+    df = pd.concat([df_ent, df_egr, df_trans], ignore_index=True)

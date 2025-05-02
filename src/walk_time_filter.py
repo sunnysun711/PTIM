@@ -162,7 +162,7 @@ def get_transfer_from_feas_iti(df_feas_iti: pd.DataFrame) -> pd.DataFrame:
 
     Returns:
         pd.DataFrame: DataFrame with columns:
-            ['rid', 'iti_id', 'path_id', 'seg_id', 'alight_ts', 'transfer_time']
+            ['rid', 'iti_id', 'path_id', 'seg_id', 'alight_ts', 'board_ts', 'transfer_time']
             where seg_id is the alighting train segment id, the transfer time is thus considered as the time difference
             between the alighting time of seg_id and the boarding time of seg_id + 1.
     """
@@ -178,13 +178,16 @@ def get_transfer_from_feas_iti(df_feas_iti: pd.DataFrame) -> pd.DataFrame:
     # calculate transfer time
     df["next_board_ts"] = df["board_ts"].shift(-1)
     df = df[df["next_index"]]
-    df["transfer_time"] = (df["next_board_ts"] - \
-        df["alight_ts"]).astype(int)
+    df["transfer_time"] = (df["next_board_ts"] -
+                           df["alight_ts"]).astype(int)
 
     # get essential data
-    res = df[["rid", "iti_id", "path_id",
-              "seg_id", "alight_ts", "transfer_time"]]
-    
+    res = df.rename(
+        columns={"next_board_ts": "board_ts"}
+    )[[
+        "rid", "iti_id", "path_id", "seg_id", "alight_ts", "board_ts", "transfer_time"
+    ]]
+
     return res
 
 
@@ -199,7 +202,7 @@ def get_transfer_from_assigned() -> pd.DataFrame:
     """
     assigned = read_all(config.CONFIG["results"]["assigned"], show_timer=False)
 
-    return get_transfer_from_feas_iti(assigned)
+    return get_transfer_from_feas_iti(assigned).drop(columns=["board_ts", "iti_id"])
 
 
 def get_path_seg_to_pp_ids():
@@ -275,3 +278,11 @@ def filter_transfer_all():
     df["transfer_time"] = df["transfer_time"].astype(int)
     df["transfer_type"] = df["transfer_type"].astype("category")
     return df
+
+
+if __name__ == "__main__":
+    config.load_config()
+    
+    df = filter_transfer_all()
+    print(df.shape)
+    print(df.head())
