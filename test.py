@@ -1,4 +1,5 @@
 # to test and implement GPT-generated code
+import cProfile
 import numpy as np
 import time
 
@@ -44,7 +45,8 @@ def test2():
     print(platform_to_pl_id.keys())
     pl_id_to_x2cdf = map_pl_id_to_x2pdf_cdf(pdf=False, cdf=True)
     # path_id = np.random.choice(get_k_pv()[:, 0], size=1)[0]
-    path_id = 1101110005  # todo: Bug found for all terminal stations. downstream platform id is not included in physical_links.csv
+    # todo: Bug found for all terminal stations. downstream platform id is not included in physical_links.csv
+    path_id = 1101110005
     print(path_id)
 
     x2cdf_for_this_path_id = pl_id_to_x2cdf[
@@ -91,7 +93,8 @@ def test4():
     egress_times = np.random.randint(low=0, high=500, size=100)
     entry_times = np.random.randint(low=0, high=500, size=100)
     transfer_t_start = np.random.randint(low=0, high=250, size=100)
-    transfer_t_end = np.random.randint(low=transfer_t_start, high=500, size=100)
+    transfer_t_end = np.random.randint(
+        low=transfer_t_start, high=500, size=100)
 
     print(f"Path ID: {path_id}, Segment ID: {seg_id}")
     print(f"Egress Times: {egress_times}")
@@ -103,8 +106,10 @@ def test4():
     calculator = WalkTimeDisModel()
 
     try:  # egress time PDF calculation
-        pdf_values = calculator.egress_time_dis_calculator(path_id, egress_times)
-        print(f"Egress PDF for path_id={path_id}, times={egress_times}: {pdf_values}")
+        pdf_values = calculator.egress_time_dis_calculator(
+            path_id, egress_times)
+        print(
+            f"Egress PDF for path_id={path_id}, times={egress_times}: {pdf_values}")
     except Exception as e:
         print(f"Egress time calculation failed: {e}")
 
@@ -112,7 +117,8 @@ def test4():
         cdf_values = calculator.entry_time_dis_calculator(
             path_id, np.zeros_like(entry_times), entry_times
         )
-        print(f"Entry CDF for path_id={path_id}, times={entry_times}: {cdf_values}")
+        print(
+            f"Entry CDF for path_id={path_id}, times={entry_times}: {cdf_values}")
     except Exception as e:
         print(f"Entry time calculation failed: {e}")
 
@@ -130,11 +136,7 @@ def test4():
 
 
 def test5():
-    import os
-    from src.globals import get_etd, get_ttd
 
-    print(get_etd())
-    print(get_ttd())
     ...
 
 

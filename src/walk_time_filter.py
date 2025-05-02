@@ -128,7 +128,7 @@ def _calculate_egress_time(df_last_seg: pd.DataFrame) -> pd.DataFrame:
 def filter_egress_all() -> pd.DataFrame:
     """
     Find egress times from left.pkl and assigned_*.pkl files, map them with physical_platform_id.
-    
+
     :return: DataFrame with columns:
         ["rid"(index), "physical_platform_id", "alight_ts", "egress_time"]
         where physical_platform_id is the ID of the physical platform,
@@ -137,20 +137,61 @@ def filter_egress_all() -> pd.DataFrame:
     """
     # [rid (index), node1, node2, alight_ts, ts2, egress_time]
     df = pd.concat([get_egress_from_left(), get_egress_from_assigned()])
-    
+
     # [physical_platform_id, node_id, uid]
-    platform = pd.DataFrame(get_platform(), columns=["physical_platform_id", "node_id", "uid"])
-    
-    df = df.reset_index().merge(platform, left_on="node1", right_on="node_id", how="left").set_index("rid")
-    assert df[df["uid"] != df["node2"]].shape[0] == 0, "Egress UID not the same!"
+    platform = pd.DataFrame(get_platform(), columns=[
+                            "physical_platform_id", "node_id", "uid"])
+
+    df = df.reset_index().merge(platform, left_on="node1",
+                                right_on="node_id", how="left").set_index("rid")
+    assert df[df["uid"] != df["node2"]
+              ].shape[0] == 0, "Egress UID not the same!"
     df = df[["physical_platform_id", "alight_ts", "egress_time"]]
     return df
+
+
+def get_transfer_from_feas_iti(df_feas_iti: pd.DataFrame) -> pd.DataFrame:
+    """
+    Find transfer times from feasible itineraries.
+    Input df_feas_iti could be left.pkl or assigned_*.pkl.
+
+    Args:
+        df_feas_iti (pd.DataFrame): DataFrame of feasible itineraries.
+            Expected columns: ['rid', 'iti_id', 'path_id', 'seg_id', 'train_id', 'board_ts', 'alight_ts']
+            Important: Please make sure the itineraries are sorted by ['rid', 'iti_id', 'seg_id']
+
+    Returns:
+        pd.DataFrame: DataFrame with columns:
+            ['rid', 'iti_id', 'path_id', 'seg_id', 'alight_ts', 'transfer_time']
+            where seg_id is the alighting train segment id, the transfer time is thus considered as the time difference
+            between the alighting time of seg_id and the boarding time of seg_id + 1.
+    """
+    # delete (rid, iti_id) with only one seg
+    seg_count = df_feas_iti.groupby(['rid', 'iti_id'])[
+        'seg_id'].transform('nunique')
+    df = df_feas_iti[seg_count > 1].copy()
+
+    # find rows that need to combine next row's board_ts
+    df['next_index'] = df.groupby(
+        ['rid', 'iti_id'])['seg_id'].shift(-1).notna()
+
+    # calculate transfer time
+    df["next_board_ts"] = df["board_ts"].shift(-1)
+    df = df[df["next_index"]]
+    df["transfer_time"] = (df["next_board_ts"] - \
+        df["alight_ts"]).astype(int)
+
+    # get essential data
+    res = df[["rid", "iti_id", "path_id",
+              "seg_id", "alight_ts", "transfer_time"]]
+    
+    return res
 
 
 def get_transfer_from_assigned() -> pd.DataFrame:
     """
     Find transfer times from assigned_*.pkl files.
-    
+
     :return: DataFrame with columns:
         ["rid", "path_id", "seg_id", "alight_ts", "transfer_time"]
         where seg_id is the alighting train segment id, the transfer time is thus considered as the time difference
@@ -158,64 +199,56 @@ def get_transfer_from_assigned() -> pd.DataFrame:
     """
     assigned = read_all(config.CONFIG["results"]["assigned"], show_timer=False)
 
-    # delete (rid, iti_id) with only one seg
-    seg_count = assigned.groupby(['rid', 'iti_id'])['seg_id'].transform('nunique')
-    assigned = assigned[seg_count > 1]
-
-    # find rows that need to combine next row's board_ts
-    assigned['next_index'] = assigned.groupby(['rid', 'iti_id'])['seg_id'].shift(-1).notna()
-
-    # calculate transfer time
-    assigned["next_board_ts"] = assigned["board_ts"].shift(-1)
-    assigned = assigned[assigned["next_index"]]
-    assigned["transfer_time"] = assigned["next_board_ts"] - assigned["alight_ts"]
-
-    # get essential data
-    res = assigned[["rid", "path_id", "seg_id", "alight_ts", "transfer_time"]]
-    return res
+    return get_transfer_from_feas_iti(assigned)
 
 
 def get_path_seg_to_pp_ids():
     """
     Get path_id, seg_id to physical platform IDs mapping dataframe.
-    
+
     :return: DataFrame with 5 columns:
         ["path_id", "seg_id", "transfer_type", "pp_id1", "pp_id2"]
     """
     k_pv_ = get_k_pv()[:, :-2]
-    df = pd.DataFrame(k_pv_, columns=["path_id", "pv_id", "node1", "node2", "link_type"])
-    
+    df = pd.DataFrame(
+        k_pv_, columns=["path_id", "pv_id", "node1", "node2", "link_type"])
+
     # delete non-transfer pathvia rows
     path_id, seg_count = np.unique(df["path_id"], return_counts=True)
     path_id_with_transfer = path_id[seg_count > 3]
     df = df[df['path_id'].isin(path_id_with_transfer)]
-    
+
     # add seg_id for in_vehicle link
     in_vehicle_df = df[df['link_type'] == 'in_vehicle'].copy()
     in_vehicle_df['seg_id'] = in_vehicle_df.groupby('path_id').cumcount() + 1
-    df = pd.merge(df, in_vehicle_df[['seg_id']], left_index=True, right_index=True, how='left')
-    
+    df = pd.merge(df, in_vehicle_df[['seg_id']],
+                  left_index=True, right_index=True, how='left')
+
     # delete first and last pathvia row (entry, egress)
     first_pv_ind = (df["pv_id"] == 1)  # entry
     last_pv_ind = first_pv_ind.shift(-1)  # egress
     df = df[~(first_pv_ind | last_pv_ind)].iloc[:-1, :]
-    
+
     # aggregate egress-entry transfer link
     df["seg_id"] = df["seg_id"].ffill().astype(int)
     df["next_node2"] = df["node2"].shift(-1)
     # fix swap expressions
     df.loc[df["link_type"] == "platform_swap", "next_node2"] = df["node2"]
-    df.loc[df["link_type"] == "egress", "link_type"] = "egress-entry"  # rename for clarity
+    df.loc[df["link_type"] == "egress",
+           "link_type"] = "egress-entry"  # rename for clarity
     mapper_ps2nodes = df[df["link_type"].isin(["egress-entry", "platform_swap"])][
         ["path_id", "seg_id", "node1", "next_node2", "link_type"]].rename(
         columns={"next_node2": "node2", "link_type": "transfer_type"}
     )
-        
+
     # map 2 node_id to 2 physical_platform_id (pp_id)
-    platform = pd.DataFrame(get_platform()[:, :-1], columns=["physical_platform_id", "node_id"]).set_index("node_id")
-    
-    mapper_ps2nodes["pp_id1"] = mapper_ps2nodes["node1"].map(platform["physical_platform_id"])
-    mapper_ps2nodes["pp_id2"] = mapper_ps2nodes["node2"].map(platform["physical_platform_id"])
+    platform = pd.DataFrame(get_platform(
+    )[:, :-1], columns=["physical_platform_id", "node_id"]).set_index("node_id")
+
+    mapper_ps2nodes["pp_id1"] = mapper_ps2nodes["node1"].map(
+        platform["physical_platform_id"])
+    mapper_ps2nodes["pp_id2"] = mapper_ps2nodes["node2"].map(
+        platform["physical_platform_id"])
     mapper_ps2nodes.drop(columns=["node1", "node2"], inplace=True)
     return mapper_ps2nodes
 
@@ -223,19 +256,22 @@ def get_path_seg_to_pp_ids():
 def filter_transfer_all():
     """
     Find transfer times from assigned_*.pkl files, map them with physical_platform_id.
-        
+
     :return: DataFrame with columns:
         ["rid" (index), "path_id", "seg_id", "pp_id1", "pp_id2", "alight_ts", "transfer_time", "transfer_type"]
         where pp_id1 and pp_id2 are the IDs of the physical platforms,
         and transfer_time is the time difference between alight_ts and board_ts.
     """
-    df_tt = get_transfer_from_assigned()  # [rid, path_id, seg_id, alight_ts, transfer_time]
-    df_mapper = get_path_seg_to_pp_ids()  # [path_id, seg_id, pp_id1, pp_id2, transfer_type]
-    df = df_tt.merge(df_mapper, on=["path_id", "seg_id"], how="left")  # [rid, path_id, seg_id, alight_ts, transfer_time, pp_id1, pp_id2, transfer_type]
-    assert df[df["pp_id1"].isna() | df["pp_id2"].isna()].shape[0] == 0, "Transfer pp_id not found!"
-    df = df[["rid", "path_id", "seg_id", "pp_id1", "pp_id2", "alight_ts", "transfer_time", "transfer_type"]].set_index("rid")
+    df_tt = get_transfer_from_assigned(
+    )  # [rid, path_id, seg_id, alight_ts, transfer_time]
+    # [path_id, seg_id, pp_id1, pp_id2, transfer_type]
+    df_mapper = get_path_seg_to_pp_ids()
+    # [rid, path_id, seg_id, alight_ts, transfer_time, pp_id1, pp_id2, transfer_type]
+    df = df_tt.merge(df_mapper, on=["path_id", "seg_id"], how="left")
+    assert df[df["pp_id1"].isna() | df["pp_id2"].isna()
+              ].shape[0] == 0, "Transfer pp_id not found!"
+    df = df[["rid", "path_id", "seg_id", "pp_id1", "pp_id2",
+             "alight_ts", "transfer_time", "transfer_type"]].set_index("rid")
     df["transfer_time"] = df["transfer_time"].astype(int)
     df["transfer_type"] = df["transfer_type"].astype("category")
     return df
-    
-    

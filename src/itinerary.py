@@ -5,7 +5,7 @@ import pandas as pd
 from src import config
 from src.utils import read_, read_all
 from src.globals import get_k_pv, get_platform, get_afc
-from src.walk_time_filter import get_path_seg_to_pp_ids
+from src.walk_time_filter import get_path_seg_to_pp_ids, get_transfer_from_feas_iti
 from src.walk_time_dis_calculator import WalkTimeDisModel
 
 # Preload AFC timestamps dataframe
@@ -59,11 +59,11 @@ def cal_entry_dis_all(wtdc: WalkTimeDisModel = None, left: pd.DataFrame = None):
 
     # Calculate entry walk distribution for each physical platform group
     left_first_seg["dis"] = 0.0  # to be filled
-    for entry_pp_id, df_ in left_first_seg.groupby("entry_pp_id"):
-        print(entry_pp_id, df_.shape)
-        df_["dis"] = wtdc.compute_entry_cdf_from_pp(pp_id=entry_pp_id, times_start=np.zeros(
-            df_.shape[0]), times_end=df_["entry_time"].values)
-        left_first_seg.loc[df_.index, "dis"] = df_["dis"].values
+    for entry_pp_id, df__ps2pp_ in left_first_seg.groupby("entry_pp_id"):
+        print(entry_pp_id, df__ps2pp_.shape)
+        df__ps2pp_["dis"] = wtdc.compute_entry_cdf__ps2pp_from_pp(pp_id=entry_pp_id, times_start=np.zeros(
+            df__ps2pp_.shape[0]), times_end=df__ps2pp_["entry_time"].values)
+        left_first_seg.loc[df__ps2pp_.index, "dis"] = df__ps2pp_["dis"].values
 
     # columns of left_first_seg: [rid, iti_id, path_id, board_ts, entry_pp_id, ts1, entry_time, dis]
     # TODO: return dict {(rid, iti_id): dis} or other structure as needed
@@ -108,7 +108,7 @@ def cal_egress_dis_all(wtdc: WalkTimeDisModel = None, left: pd.DataFrame = None)
     # Map egress physical platform id
     left_last_seg["egress_pp_id"] = left_last_seg["path_id"].map(
         path_id2egress_pp_id)
-    
+
     # Calculate egress times relative to AFC tap-out times
     left_last_seg["ts2"] = left_last_seg["rid"].map(AFC_TS["ts2"])
     left_last_seg["egress_time"] = left_last_seg["ts2"] - \
@@ -116,15 +116,16 @@ def cal_egress_dis_all(wtdc: WalkTimeDisModel = None, left: pd.DataFrame = None)
 
     # Calculate egress walk distribution for each physical platform group
     left_last_seg["dis"] = 0.0  # to be filled
-    for egress_pp_id, df_ in left_last_seg.groupby("egress_pp_id"):
-        print(egress_pp_id, df_.shape)
-        df_["dis"] = wtdc.compute_egress_pdf_from_pp(
-            pp_id=egress_pp_id, times=df_["egress_time"].values)
-        left_last_seg.loc[df_.index, "dis"] = df_["dis"].values
+    for egress_pp_id, df__ps2pp_ in left_last_seg.groupby("egress_pp_id"):
+        print(egress_pp_id, df__ps2pp_.shape)
+        df__ps2pp_["dis"] = wtdc.compute_egress_pdf__ps2pp_from_pp(
+            pp_id=egress_pp_id, times=df__ps2pp_["egress_time"].values)
+        left_last_seg.loc[df__ps2pp_.index, "dis"] = df__ps2pp_["dis"].values
 
     # columns of left_last_seg: [rid, iti_id, path_id, alight_ts, egress_pp_id, ts2, egress_time, dis]
     # TODO: return dict {(rid, iti_id): dis} or other structure as needed
     ...
+
 
 def cal_transfer_dis_all(wtdc: WalkTimeDisModel = None, left: pd.DataFrame = None):
     """
@@ -144,8 +145,28 @@ def cal_transfer_dis_all(wtdc: WalkTimeDisModel = None, left: pd.DataFrame = Non
         print("[INFO] Initializing WalkTimeDisCalculator for cal_transfer_dis()...")
         wtdc = WalkTimeDisModel(etd=get_etd(), ttd=get_ttd())
     if left is None:
-        left = read_(config.CONFIG["results"]["left"])
+        left = read_(config.CONFIG["results"]["left"], show_timer=False)
 
-    df_path_seg_pp_ids = get_path_seg_to_pp_ids()  # ["path_id", "seg_id", "pp_id1", "pp_id2", "transfer_type"]
+    # Extract path segments with transfer
+    df = get_transfer_from_feas_iti(df_feas_iti=left)  # ['rid', 'iti_id', 'path_id', 'seg_id', 'alight_ts', 'transfer_time']
     
+    df_ps2pp = get_path_seg_to_pp_ids()  # ["path_id", "seg_id", "pp_id1", "pp_id2", "transfer_type"]
+    df_ps2pp["pp_id_min"] = df_ps2pp[["pp_id1", "pp_id2"]].min(axis=1)
+    df_ps2pp["pp_id_max"] = df_ps2pp[["pp_id1", "pp_id2"]].max(axis=1)
+    df_ps2pp.drop(columns=["pp_id1", "pp_id2"], inplace=True)
+    
+    # Merge path segments with transfer and path segments to physical platforms
+    df = df.merge(df_ps2pp, on=["path_id", "seg_id"], how="left")
+    
+    # calculate transfer time CDF for each physical platform group
+    df["dis"] = 0.0  # to be filled
+    for (pp_id_min, pp_id_max), df_ in df.groupby(["pp_id_min", "pp_id_max"]):
+        print(pp_id_min, pp_id_max, df_.shape)
+        dis = wtdc.compute_transfer_cdf_from_pp(
+            pp_id_min, pp_id_max, 
+            times_start=np.zeros(df_.shape[0]), 
+            times_end=df_["transfer_time"].values
+            )
+        df.loc[df_.index, "dis"] = dis
+    # columns of df: [rid, path_id, seg_id, alight_ts, transfer_time, transfer_type, pp_id_min, pp_id_max, dis]
     ...
