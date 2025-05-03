@@ -9,3 +9,5 @@ scripts/__pycache__/
 /results/
 /figures/
 .ipynb_checkpoints/
+test*.py
+test*.ipynb
