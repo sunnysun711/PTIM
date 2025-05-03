@@ -69,17 +69,19 @@ def tqdm_joblib(tqdm_object):
 def split_fn_index_ext(full_fn: str) -> tuple[str, str, str]:
     """
     Split a filename into its base name, index, and extension.
-    Parameters:
-    -----------
-    full_fn : str
-        The full filename including the base name, index, and extension.
-    Returns:
-    --------
-    tuple[str, str, str]
-        A tuple containing the base name, index, and extension.
-        Example:
-            egress_times_2.pkl -> ('egress_times', '_2', '.pkl')
-            iti/AFC_no_iti.pkl -> ('iti/AFC_no_iti', '', '.pkl')
+    
+    :param full_fn: The full filename including the base name, index, and extension.
+    :type full_fn: str
+    
+    :return: A tuple containing the base name, index, and extension.
+    :rtype: tuple[str, str, str]
+    
+    Example:
+        >>> split_fn_index_ext("egress_times_2.pkl") 
+        ('egress_times', '_2', '.pkl')
+
+        >>> split_fn_index_ext("iti/AFC_no_iti.pkl") 
+        ('iti/AFC_no_iti', '', '.pkl')
     """
     parts = full_fn.rsplit(".", 1)
     fn = parts[0]
@@ -93,17 +95,21 @@ def get_folder_and_subfolder(fn: str, ext: str) -> tuple[str, str]:
     """
     Determines the folder and subfolder based on the file name.
 
-    Parameters:
-    -----------
-    fn : str
-        The base file name (without extension).
-    ext : str
-        The file extension.
+    :param fn: The base file name (without extension).
+    :type fn: str
+    :param ext: The file extension.
+    :type ext: str
 
-    Returns:
+    :returns: A tuple containing the folder and subfolder.
+    :rtype: tuple[str, str]
+
+    Example:
     --------
-    tuple[str, str]
-        A tuple containing the folder and subfolder.
+    >>> get_folder_and_subfolder("path", ".pkl")
+    ('results', 'network')
+
+    >>> get_folder_and_subfolder("AFC", ".pkl")
+    ('data', '')
     """
     if fn + ext in config.CONFIG['data']:
         return config.CONFIG['data_folder'], ""
@@ -117,21 +123,21 @@ def get_file_path(fn: str, latest_: bool = False) -> str:
     """
     Determines the file path based on the file name (fn) and the configuration. (no index)
 
-    Parameters:
-    -----------
-    fn : str
-        The name of the file. The function checks whether the file is a part of the
+    :param fn: The name of the file. The function checks whether the file is a part of the
         data or results sections in the config and constructs the appropriate path.
+    :type fn: str
+    :param latest_: (optional) If True, return the path for the latest file version.
+    :type latest_: bool, optional
 
-    Returns:
+    :returns: The full file path including the folder, subfolder, and file name.
+    :rtype: str
+
+    :raises ValueError: If the file name is not found in the predefined list of data or results in the configuration.
+
+    Example:
     --------
-    str
-        The full file path including the folder, subfolder, and file name.
-
-    Raises:
-    -------
-    ValueError
-        If the file name is not found in the predefined list of data or results in the configuration.
+    >>> get_file_path("data_file", latest_=True)
+    '/data/results/latest/data_file.csv'
     """
     fn, index, ext = split_fn_index_ext(fn)
     folder, subfolder = get_folder_and_subfolder(fn, ext)
@@ -145,21 +151,22 @@ def get_latest_file_index(fn: str, folder: str = "", subfolder: str = "", get_ne
     """
     Get the latest file index for versioned files.
 
-    Parameters:
-    -----------
-    fn : str
-        The base file name (without extension).
-    folder : str, optional
-        The folder path.
-    subfolder : str, optional
-        The subfolder path.
-    get_next : bool, optional
-        If True, return the next available index. If False, return the latest index.
+    :param fn: The base file name (without extension).
+    :type fn: str
+    :param folder: The folder path.
+    :type folder: str, optional
+    :param subfolder: The subfolder path.
+    :type subfolder: str, optional
+    :param get_next: If True, return the next available index. If False, return the latest index.
+    :type get_next: bool, optional
 
-    Returns:
+    :returns: The index of the latest file.
+    :rtype: int
+
+    Example:
     --------
-    int
-        The index of the latest file.
+    >>> get_latest_file_index("etd", folder="results", subfolder="egress", get_next=True)
+    5
     """
     base_fn, index, ext = split_fn_index_ext(fn)
     for i in range(1, 10001):
@@ -175,39 +182,44 @@ def get_latest_file_index(fn: str, folder: str = "", subfolder: str = "", get_ne
 def read_(fn: str = "AFC", show_timer: bool = False, drop_cols: bool = True,
           latest_: bool = False) -> pd.DataFrame | dict | list:
     """
-    Reads a file from a specified folder based on its name and extension. The function handles different file
-    formats such as .csv, .parquet, .pkl, and .json, and returns the corresponding data as a pandas DataFrame,
+    Reads a file from a specified folder based on its name and extension. 
+    
+    The function handles different file formats such as .csv, .parquet, .pkl, 
+    and .json, and returns the corresponding data as a pandas DataFrame, 
     dictionary, or list.
 
-    Parameters:
-    -----------
-    fn : str, optional, default="AFC"
-        The name of the file to be read. The file name can be specified without an extension, and the function
-        will automatically append the appropriate extension (.pkl, .csv, .parquet, or .json) based on the file type.
+    :param fn: The name of the file to be read. 
+        
+        The file name can be specified without an extension, and the function 
+        will automatically append the appropriate extension (.pkl, .csv, 
+        .parquet, or .json) based on the file type.
+    :type fn: str, optional, default="AFC"
 
-    show_timer : bool, optional, default=False
-        If set to True, the function will display a timer showing how long the read operation takes. (Currently unused).
+    :param show_timer: If set to True, the function will display a timer 
+        showing how long the read operation takes. (Currently unused).
+    :type show_timer: bool, optional, default=False
 
-    drop_cols : bool, optional, default=True
-        If set to True, the function will drop certain columns from the DataFrame based on the file name, such as
-        "STATION1_NID", "STATION2_NID", and others for specific files like "AFC.pkl" or "STA.pkl".
+    :param drop_cols: If set to True, the function will drop certain columns 
+        from the DataFrame based on the file name, such as "STATION1_NID", 
+        "STATION2_NID", and others for specific files like "AFC.pkl" or "STA.pkl".
+    :type drop_cols: bool, optional, default=True
 
-    latest_ : bool, optional, default=False
-        If set to True, the function will read the latest version of the file based on the file name. The latest
-        version is determined by checking for files with the same base name but with an index suffix (_1, _2, etc.).
+    :param latest_: If set to True, the function will read the latest version of 
+        the file based on the file name. 
+        
+        The latest version is determined by checking for files with the same base 
+        name but with an index suffix (_1, _2, etc.).
+        
         If no latest version is found, the function will raise a FileNotFoundError.
+    :type latest_: bool, optional, default=False
 
-    Returns:
-    --------
-    pd.DataFrame | dict | list
-        The function returns a pandas DataFrame, dictionary, or list, depending on the file format:
+    :returns: The function returns a pandas DataFrame, dictionary, or list, depending on the file format:
+        
         - DataFrame for .csv, .parquet, and .pkl files.
         - Dictionary for .json files.
+    :rtype: pd.DataFrame | dict | list
 
-    Raises:
-    -------
-    ValueError
-        If the file name is not found in the predefined list of data or results in the configuration, or if
+    :raises ValueError: If the file name is not found in the predefined list of data or results in the configuration, or if
         the file extension is unrecognized.
 
     Example:
@@ -256,27 +268,27 @@ def save_(fn: str, data: pd.DataFrame, auto_index_on: bool = False) -> None:
     """
     Saves a DataFrame to a .pkl file.
 
-    Parameters:
-    -----------
-    fn : str
-        The name of the file. The function will save the data to the appropriate directory based on the configuration.
+    :param fn: The name of the file. The function will save the data to the appropriate directory based on the configuration.
+    :type fn: str
 
-    data : pd.DataFrame
-        The pandas DataFrame to be saved.
+    :param data: The pandas DataFrame to be saved.
+    :type data: pd.DataFrame
 
-    auto_index_on : bool, optional, default=False
-        If set to True, the function will automatically append an index to the file name to avoid overwriting existing
-        files. The index will be appended as `_1`, `_2`, etc., up to `_10000`. If no available index is found, the
-        function will raise a RuntimeError.
+    :param auto_index_on: If set to True, the function will automatically append an index to the file name
+        to avoid overwriting existing files. 
+        
+        The index will be appended as `_1`, `_2`, etc., up to `_10000`. If no available
+        index is found, the function will raise a RuntimeError.
+    :type auto_index_on: bool, optional, default=False
+
+    :returns: None
+
+    :raises ValueError: If the file extension is not in `.pkl`, `.csv`, `.parquet`.
 
     Example:
     --------
-    save_("my_data", my_dataframe)
+    >>> save_("my_data", my_dataframe)
 
-    Raises:
-    -------
-    ValueError
-        If the file extension is not in `.pkl`, `.csv`, `.parquet`.
     """
     if len(fn.split(".")) == 1:  # No extension
         fn = f"{fn}.pkl"
@@ -306,9 +318,15 @@ def save_(fn: str, data: pd.DataFrame, auto_index_on: bool = False) -> None:
 def read_all(fn: str, show_timer: bool = False) -> pd.DataFrame:
     """
     Reads all versioned files (e.g., base_1.pkl ~ base_10000.pkl) and concatenates them into a single DataFrame.
+    
     :param fn: Prefix of the file.
+    :type fn: str
+    
     :param show_timer: Whether to show timing information.
+    :type show_timer: bool
+
     :return: Concatenated DataFrame.
+    :rtype: pd.DataFrame
     """
     dfs = []
     fp = get_file_path(fn)

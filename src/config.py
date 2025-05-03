@@ -9,6 +9,12 @@ CONFIG: dict = {}
 def determine_results_subfolder(fn: str) -> str:
     """
     Determines the subfolder for results files based on the file name.
+
+    :param fn: The name of the file.
+    :type fn: str
+    
+    :return: The subfolder name.
+    :rtype: str
     """
     if fn in [
         CONFIG["results"]["node"],

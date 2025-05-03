@@ -38,16 +38,23 @@ def reject_outlier_bd(data: np.ndarray, method: str = "zscore", abs_max: int | N
     """
     Calculate bounds for outlier rejection.
     see:
-        boxplot: https://www.secrss.com/articles/11994
-        zscore: https://www.zhihu.com/question/38066650
+        
+        - boxplot: "https://www.secrss.com/articles/11994"
+        - zscore: "https://www.zhihu.com/question/38066650"
 
     :param data: Input data array.
-    :param method: Outlier detection method ('zscore' or 'boxplot').
-    :param abs_max: Absolute maximum value constraint.
-    :return: A tuple of lower and upper bounds for valid data.
+    :type data: np.ndarray
 
-    Raises:
-        Exception: If an invalid method is provided.
+    :param method: Outlier detection method ('zscore' or 'boxplot').
+    :type method: str, optional, default="zscore"
+
+    :param abs_max: Absolute maximum value constraint.
+    :type abs_max: int | None, optional, default=500
+
+    :returns: A tuple of lower and upper bounds for valid data.
+    :rtype: tuple[float, float]
+
+    :raises Exception: If an invalid method is provided.
     """
     if method == "boxplot":
         miu = np.mean(data)
@@ -75,16 +82,23 @@ def reject_outlier(data: np.ndarray, method: str = "zscore", abs_max: int = 500)
     """
     Reject outliers from the input data array based on the specified method.
     see:
-        boxplot: https://www.secrss.com/articles/11994
-        zscore: https://www.zhihu.com/question/38066650
-
+        
+        - boxplot: "https://www.secrss.com/articles/11994"
+        - zscore: "https://www.zhihu.com/question/38066650"
+        
     :param data: Input data array.
-    :param method: Outlier detection method ('zscore' or 'boxplot').
-    :param abs_max: Absolute maximum value constraint.
-    :return: cleaned data array.
+    :type data: np.ndarray
 
-    Raises:
-        Exception: If an invalid method is provided.
+    :param method: Outlier detection method ('zscore' or 'boxplot').
+    :type method: str, optional, default="zscore"
+
+    :param abs_max: Absolute maximum value constraint.
+    :type abs_max: int, optional, default=500
+
+    :returns: Cleaned data array.
+    :rtype: np.ndarray
+
+    :raises Exception: If an invalid method is provided.
     """
     lb, ub = reject_outlier_bd(data, method=method, abs_max=abs_max)
     return data[(data >= lb) & (data <= ub)]
@@ -94,19 +108,17 @@ def fit_pdf_cdf(data: np.ndarray, method: str = "kde") -> tuple[Callable, Callab
     """
     Fit a probability density function (PDF) and cumulative distribution function (CDF) to the input data.
 
-    Parameters:
-        data (np.ndarray): Input data array.
-        method (str): Method to fit the PDF and CDF. Options are 'kde' (Kernel Density Estimation),
-                      'gamma' (Gamma Distribution), and 'lognorm' (Log-Normal Distribution).
+    :param data: Input data array.
+    :type data: np.ndarray
 
-    Returns:
-        tuple[Callable, Callable]: A tuple containing the fitted PDF function and CDF function.
-                                   The PDF function takes x values as input and returns the corresponding
-                                   PDF values. The CDF function takes x values as input and returns the
-                                   corresponding CDF values.
+    :param method: Method to fit the PDF and CDF. Options are 'kde' (Kernel Density Estimation),
+                   'gamma' (Gamma Distribution), and 'lognorm' (Log-Normal Distribution).
+    :type method: str, optional, default="kde"
 
-    Raises:
-        Exception: If an invalid method is provided.
+    :returns: A tuple containing the fitted PDF function and CDF function.
+    :rtype: tuple[Callable, Callable]
+
+    :raises Exception: If an invalid method is provided.
     """
     if method == "kde":
         from scipy.stats import gaussian_kde
@@ -132,8 +144,13 @@ def evaluate_fit(data: np.ndarray, cdf_func: Callable) -> tuple[float, float]:
     Evaluate the fit of a cumulative distribution function (CDF) to the input data.
 
     :param data: Input data array.
+    :type data: np.ndarray
+
     :param cdf_func: CDF function to evaluate.
-    :return: A tuple containing the K-S statistic and the p-value of the K-S test.
+    :type cdf_func: Callable
+
+    :returns: A tuple containing the K-S statistic and the p-value of the K-S test.
+    :rtype: tuple[float, float]
     """
     data_sorted = np.sort(data)
     return kstest(data_sorted, cdf_func)
@@ -141,23 +158,19 @@ def evaluate_fit(data: np.ndarray, cdf_func: Callable) -> tuple[float, float]:
 
 def fit_one_physical_platform(pp_id: int, eg_t_data: np.ndarray, x: np.ndarray) -> np.ndarray | None:
     """
-    Fit the distribution of physical platform egress time with the following columns:
-        [
-            pp_id, x,
-            kde_pdf, kde_cdf, kde_ks_stat, kde_ks_p_value,
-            gamma_pdf, gamma_cdf, gamma_ks_stat, gamma_ks_p_value,
-            lognorm_pdf, lognorm_cdf, lognorm_ks_stat, lognorm_ks_p_value
-        ]
+    Fit the distribution of physical platform egress time.
 
-    Parameters:
-    --------
     :param pp_id: Physical platform ID.
-    :param eg_t_data: Egress time numpy array of the current physical platform.
-    :param x: X values for PDF and CDF, usually [0, 500] with 501 points.
+    :type pp_id: int
 
-    Returns:
-    --------
-    :return: np.ndarray | None: Array with shape (x.size, 14) or None.
+    :param eg_t_data: Egress time numpy array of the current physical platform.
+    :type eg_t_data: np.ndarray
+
+    :param x: X values for PDF and CDF, usually [0, 500] with 501 points.
+    :type x: np.ndarray
+
+    :returns: An array with shape (x.size, 14) or None if no data is available.
+    :rtype: np.ndarray | None
     """
     if eg_t_data.size == 0:
         return None
@@ -180,22 +193,35 @@ def fit_platform_egress_time_dis_all_parallel(
         eg_t: pd.DataFrame, n_jobs: int = -1
 ):
     """
-    Fit the distribution of physical platform egress time with the following columns:
-        [
-            pp_id, x,
-            kde_pdf, kde_cdf, kde_ks_stat, kde_ks_p_value,
-            gamma_pdf, gamma_cdf, gamma_ks_stat, gamma_ks_p_value,
-            lognorm_pdf, lognorm_cdf, lognorm_ks_stat, lognorm_ks_p_value
-        ]
+    Fit the distribution of physical platform egress time in parallel.
 
     :param eg_t: Egress time dataframe.
         Each row is [rid (index), physical_platform_id, alight_ts, egress_time].
-    :param n_jobs: Number of threads to use. Default is -1, which uses all available threads.
+    :type eg_t: pd.DataFrame
 
-    :return: pd.DataFrame: Dataframe with shape (x.size * pp_id.size, 14).
-        Each row is [pp_id, x, kde_pdf, kde_cdf, kde_ks_stat, kde_ks_p_value,
-                    gamma_pdf, gamma_cdf, gamma_ks_stat, gamma_ks_p_value,
-                    lognorm_pdf, lognorm_cdf, lognorm_ks_stat, lognorm_ks_p_value].
+    :param n_jobs: Number of threads to use. Default is -1, which uses all available threads.
+    :type n_jobs: int, optional, default=-1
+
+    :returns: A DataFrame with the fitted distribution for each physical platform.
+        
+        Each row contains the following columns:
+
+            - `pp_id`: Physical platform ID.
+            - `x`: x values (0-500).
+            - `kde_pdf`: KDE fitted probability density function.
+            - `kde_cdf`: KDE fitted cumulative distribution function.
+            - `kde_ks_stat`: K-S statistic for KDE fit.
+            - `kde_ks_p_value`: K-S p-value for KDE fit.
+            - `gamma_pdf`: Gamma fitted probability density function.
+            - `gamma_cdf`: Gamma fitted cumulative distribution function.
+            - `gamma_ks_stat`: K-S statistic for Gamma fit.
+            - `gamma_ks_p_value`: K-S p-value for Gamma fit.
+            - `lognorm_pdf`: Log-normal fitted probability density function.
+            - `lognorm_cdf`: Log-normal fitted cumulative distribution function.
+            - `lognorm_ks_stat`: K-S statistic for Log-normal fit.
+            - `lognorm_ks_p_value`: K-S p-value for Log-normal fit.
+
+    :rtype: pd.DataFrame
     """
     print(
         f"[INFO] Start fitting egress time distribution using {n_jobs} threads...")
@@ -226,16 +252,28 @@ def fit_platform_egress_time_dis_all_parallel(
 def fit_transfer_time_dis_all(tr_t: pd.DataFrame) -> pd.DataFrame:
     """
     Fit the distribution of transfer time for all transfer links.
-    :param tr_t: Transfer time dataframe.
-        Columns: [rid(index), path_id, seg_id, pp_id1, pp_id2, alight_ts, transfer_time, transfer_type]
+    :param tr_t: Transfer time dataframe with columns: 
+        
+        [rid (index), path_id, seg_id, pp_id1, pp_id2, alight_ts, transfer_time, transfer_type]
+    :type tr_t: pd.DataFrame
+
     :return: Dataframe with columns:
         [pp_id_min, pp_id_max, x, kde_cdf, gamma_cdf, lognorm_cdf]
-        where pp_id_min and pp_id_max are the physical platform ids of the transfer link,
-        x is the transfer time, and kde_cdf, gamma_cdf, lognorm_cdf are the CDF values of the transfer time distribution
-        fitted with KDE, Gamma, and Log-Normal distributions respectively.
-        Each row is a transfer link.
-        Note: for platform_swap transfers (pp_id_min=pp_id_max), the CDF values are all 1, and x is only one value as 0.
-        Note: for egress-entry transfers, the CDF values are normalized to [0, 1].
+        
+        where: 
+            
+        - `pp_id_min` and `pp_id_max` are the physical platform ids of the 
+            transfer link,
+        - `x` is the transfer time, and kde_cdf, gamma_cdf, lognorm_cdf are the 
+            CDF values of the transfer time distribution fitted with KDE, 
+            Gamma, and Log-Normal distributions respectively.
+        - Each row is a transfer link.
+    :rtype: pd.DataFrame
+    
+    Note: 
+        
+        - for platform_swap transfers (pp_id_min=pp_id_max), the CDF values are all 1, and x is only one value as 0.
+        - for egress-entry transfers, the CDF values are normalized to [0, 1].
     """
     print("[INFO] Start fitting transfer time distribution...")
     platform: np.ndarray = get_platform()  # [pp_id, node_id, uid]

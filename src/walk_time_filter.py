@@ -39,13 +39,16 @@ def get_egress_from_left() -> pd.DataFrame:
     Find rids in left.pkl where all feasible itineraries share the same final train_id.
     In this case, all itineraries of that rid lead to the same egress time.
 
-    :return: A DataFrame with the shape (n_rids, 5), where "rid" serves as the index.
-             It includes the following columns:
-             - "node1": The starting node of the egress path.
-             - "node2": The ending node of the egress path.
-             - "alight_ts": The time when the passenger alighted from the vehicle.
-             - "ts2": The time when the passenger exited the station.
-             - "egress_time": The calculated egress time, which is the difference between "ts2" and "alight_ts".
+    :return: 
+        DataFrame with the shape (n_rids, 5), where "rid" serves as the index.
+        It includes the following columns:
+
+        - `node1`: The starting node of the egress path.
+        - `node2`: The ending node of the egress path.
+        - `alight_ts`: The time when the passenger alighted from the vehicle.
+        - `ts2`: The time when the passenger exited the station.
+        - `egress_time`: The calculated egress time, which is the difference between `ts2` and `alight_ts`.
+    :rtype: pd.DataFrame
     """
     df = read_(config.CONFIG["results"]["left"], show_timer=False)
 
@@ -69,13 +72,16 @@ def get_egress_from_assigned() -> pd.DataFrame:
     """
     Find rids in all assigned_*.pkl files where all feasible itineraries share the same final train_id.
 
-    :return: A DataFrame with the shape (n_rids, 5), where "rid" serves as the index.
-             It includes the following columns:
-             - "node1": The starting node of the egress path.
-             - "node2": The ending node of the egress path.
-             - "alight_ts": The time when the passenger alighted from the vehicle.
-             - "ts2": The time when the passenger exited the station.
-             - "egress_time": The calculated egress time, which is the difference between "ts2" and "alight_ts".
+    :return: 
+        DataFrame with the shape (n_rids, 5), where "rid" serves as the index.
+        It includes the following columns:
+        
+        - `node1`: The starting node of the egress path.
+        - `node2`: The ending node of the egress path.
+        - `alight_ts`: The time when the passenger alighted from the vehicle.
+        - `ts2`: The time when the passenger exited the station.
+        - `egress_time`: The calculated egress time, which is the difference between `ts2` and `alight_ts`.
+    :rtype: pd.DataFrame
     """
     df = read_all(config.CONFIG["results"]["assigned"], show_timer=False)
 
@@ -95,16 +101,18 @@ def _calculate_egress_time(df_last_seg: pd.DataFrame) -> pd.DataFrame:
     :param df_last_seg: A DataFrame that holds the last segment information of each itinerary.
                         Each row corresponds to a unique passenger, identified by the "rid" index.
 
-    :return: A DataFrame with the shape (n_rids, 5), where "rid" serves as the index.
-             It includes the following columns:
-             - "node1": The starting node of the egress path.
-             - "node2": The ending node of the egress path.
-             - "alight_ts": The time when the passenger alighted from the vehicle.
-             - "ts2": The time when the passenger exited the station.
-             - "egress_time": The calculated egress time, which is the difference between "ts2" and "alight_ts".
+    :return: 
+        DataFrame with the shape (n_rids, 5), where "rid" serves as the index.
+        It includes the following columns:
+        
+        - `node1`: The starting node of the egress path.
+        - `node2`: The ending node of the egress path.
+        - `alight_ts`: The time when the passenger alighted from the vehicle.
+        - `ts2`: The time when the passenger exited the station.
+        - `egress_time`: The calculated egress time, which is the difference between `ts2` and `alight_ts`.
+    :rtype: pd.DataFrame
 
-    Raises:
-        AssertionError: If the last segment found does not match the last segment in the path,
+    :raises AssertionError: If the last segment found does not match the last segment in the path,
                         indicating a potential data inconsistency.
     """
     afc = get_afc()
@@ -131,9 +139,11 @@ def filter_egress_all() -> pd.DataFrame:
 
     :return: DataFrame with columns:
         ["rid"(index), "physical_platform_id", "alight_ts", "egress_time"]
-        where physical_platform_id is the ID of the physical platform,
-        alight_ts is the time when the passenger alighted from the train,
-        and egress_time is the time difference between ts2 and alight_ts.
+        
+        - physical_platform_id is the ID of the physical platform,
+        - alight_ts is the time when the passenger alighted from the train,
+        - egress_time is the time difference between ts2 and alight_ts.
+    :rtype: pd.DataFrame
     """
     # [rid (index), node1, node2, alight_ts, ts2, egress_time]
     df = pd.concat([get_egress_from_left(), get_egress_from_assigned()])
@@ -155,16 +165,18 @@ def get_transfer_from_feas_iti(df_feas_iti: pd.DataFrame) -> pd.DataFrame:
     Find transfer times from feasible itineraries.
     Input df_feas_iti could be left.pkl or assigned_*.pkl.
 
-    Args:
-        df_feas_iti (pd.DataFrame): DataFrame of feasible itineraries.
-            Expected columns: ['rid', 'iti_id', 'path_id', 'seg_id', 'train_id', 'board_ts', 'alight_ts']
-            Important: Please make sure the itineraries are sorted by ['rid', 'iti_id', 'seg_id']
+    :param df_feas_iti: DataFrame of feasible itineraries.
+        Expected columns: ['rid', 'iti_id', 'path_id','seg_id', 'train_id', 'board_ts', 'alight_ts']
+        
+        **Important**: Please make sure the itineraries are sorted by ['rid', 'iti_id','seg_id']
+    :type df_feas_iti: pd.DataFrame
 
-    Returns:
-        pd.DataFrame: DataFrame with columns:
-            ['rid', 'iti_id', 'path_id', 'seg_id', 'alight_ts', 'board_ts', 'transfer_time']
-            where seg_id is the alighting train segment id, the transfer time is thus considered as the time difference
-            between the alighting time of seg_id and the boarding time of seg_id + 1.
+    :return: DataFrame with columns:
+        ["rid", "iti_id", "path_id", "seg_id", "alight_ts", "board_ts", "transfer_time"]
+        
+        - `seg_id`: the alighted train segment id
+        - `transfer_time`: the time difference between the `alight_ts` of `seg_id` and the `board_ts` of `seg_id` + 1.
+    :rtype: pd.DataFrame
     """
     # delete (rid, iti_id) with only one seg
     seg_count = df_feas_iti.groupby(['rid', 'iti_id'])[
@@ -194,20 +206,26 @@ def get_transfer_from_assigned() -> pd.DataFrame:
 
     :return: DataFrame with columns:
         ["rid", "path_id", "seg_id", "alight_ts", "transfer_time"]
-        where seg_id is the alighting train segment id, the transfer time is thus considered as the time difference
-        between the alighting time of seg_id and the boarding time of seg_id + 1.
+        
+        - `seg_id`: the alighted train segment id
+    :rtype: pd.DataFrame
+    
     """
     assigned = read_all(config.CONFIG["results"]["assigned"], show_timer=False)
 
     return get_transfer_from_feas_iti(assigned).drop(columns=["board_ts", "iti_id"])
 
 
-def get_path_seg_to_pp_ids():
+def get_path_seg_to_pp_ids() -> pd.DataFrame:
     """
     Get path_id, seg_id to physical platform IDs mapping dataframe.
 
     :return: DataFrame with 5 columns:
         ["path_id", "seg_id", "transfer_type", "pp_id1", "pp_id2"]
+
+        - `pp_id1`: the physical platform ID of the 'from' node of the transfer link
+        - `pp_id2`: the physical platform ID of the 'to' node of the transfer link
+    :rtype: pd.DataFrame
     """
     k_pv_ = get_k_pv()[:, :-2]
     df = pd.DataFrame(
@@ -253,14 +271,17 @@ def get_path_seg_to_pp_ids():
     return mapper_ps2nodes
 
 
-def filter_transfer_all():
+def filter_transfer_all() -> pd.DataFrame:
     """
     Find transfer times from assigned_*.pkl files, map them with physical_platform_id.
 
     :return: DataFrame with columns:
         ["rid" (index), "path_id", "seg_id", "pp_id1", "pp_id2", "alight_ts", "transfer_time", "transfer_type"]
-        where pp_id1 and pp_id2 are the IDs of the physical platforms,
-        and transfer_time is the time difference between alight_ts and board_ts.
+
+        - `pp_id1`: the physical platform ID of the 'from' node of the transfer link
+        - `pp_id2`: the physical platform ID of the 'to' node of the transfer link
+        - `transfer_type`: the type of the transfer link, either "egress-entry" or "platform_swap"
+    :rtype: pd.DataFrame
     """
     df_tt = get_transfer_from_assigned(
     )  # [rid, path_id, seg_id, alight_ts, transfer_time]

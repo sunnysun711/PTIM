@@ -37,10 +37,14 @@ TTD: np.ndarray | None = None
 def get_k_pv() -> np.ndarray:
     """
     Get global variable K_PV.
+
     If K_PV is not initialized, read from pathvia.pkl and store in K_PV.
 
-    :return: Array of k-shortest paths, full details (including walk links)
-        with columns: ["path_id", "pv_id", "node_id1", "node_id2", "link_type", "line", "updown"].
+    :return: 
+        Array of k-shortest paths, full details (including walk links) with columns: 
+        
+        ["path_id", "pv_id", "node_id1", "node_id2", "link_type", "line", "updown"].
+    :rtype: np.ndarray
     """
     global K_PV
     if K_PV is None:
@@ -53,11 +57,15 @@ def get_k_pv_dict() -> dict[(int, int), np.ndarray]:
     """
     Get global variable K_PV_DICT. Map each (uid1, uid2) station pair to its k-shortest path
     represented by an array of path via segments.
+
     If K_PV_DICT is not initialized, build it using build_k_pv_dic().
 
-    :return: A dictionary where each key is a (uid1, uid2) tuple representing
-             a station OD pair, and each value is an array of shape (k, 5) with columns:
-             ["path_id", "nid1", "nid2", "line", "updown"].
+    :return: 
+        A dictionary where each key is a (`uid1`, `uid2`) tuple representing
+        a station OD pair, and each value is an array of shape (k, 5) with columns:
+        
+        ["path_id", "nid1", "nid2", "line", "updown"].
+    :rtype: dict[(int, int), np.ndarray]
     """
     global K_PV_DICT
     if K_PV_DICT is None:
@@ -100,11 +108,16 @@ def get_k_pv_dict() -> dict[(int, int), np.ndarray]:
 def get_tt() -> np.ndarray:
     """
     Get global variable TT.
+
     If TT is not initialized, build it using build_tt().
 
-    :return: Array of shape (n, 6) with columns:
+    :return: 
+        Array of shape (n, 6) with columns:
+
         ["TRAIN_ID", "STATION_NID", "LINE_NID", "UPDOWN", "ts1", "DEPARTURE_TS"],
+
         where `ts1` is the time when the doors open.
+    :rtype: np.ndarray
     """
     global TT
     if TT is None:
@@ -119,11 +132,16 @@ def get_tt() -> np.ndarray:
 def get_afc() -> np.ndarray:
     """
     Get global variable AFC.
+
     If AFC is not initialized, read from AFC.pkl and store in AFC.
 
-    :return: Array of shape (n, 5) with columns:
+    :return: 
+        Array of shape (n, 5) with columns:
+        
         [RID, STATION_UID1, TS1, STATION_UID2, TS2],
+        
         where `TS1` and `TS2` are the tap-in and tap-out times.
+    :rtype: np.ndarray
     """
     global AFC
     if AFC is None:
@@ -135,9 +153,14 @@ def get_afc() -> np.ndarray:
 def get_node_info() -> pd.DataFrame:
     """
     Get global variable NODE_INFO.
+
     If NODE_INFO is not initialized, read from node_info.pkl and store in NODE_INFO.
-    :return: Dataframe with columns: 
-        'node_id', 'STATION_NID', 'STATION_UID', 'IS_TRANSFER', 'IS_TERMINAL', 'LINE_NID', 'updown'
+
+    :return: 
+        Dataframe with columns: 
+
+        ['node_id', 'STATION_NID', 'STATION_UID', 'IS_TRANSFER', 'IS_TERMINAL', 'LINE_NID', 'updown']
+    :rtype: pd.DataFrame
     """
     global NODE_INFO
     if NODE_INFO is None:
@@ -149,9 +172,14 @@ def get_node_info() -> pd.DataFrame:
 def get_link_info() -> np.ndarray:
     """
     Get global variable LINK_INFO.
+
     If LINK_INFO is not initialized, read from link_info.pkl and store in LINK_INFO.
-    :return: Array of shape (n, 4) with columns:
+
+    :return: 
+        Array of shape (n, 4) with columns:
+        
         ["weight", "node_id1", "node_id2", "link_type"].
+    :rtype: np.ndarray
     """
     global LINK_INFO
     if LINK_INFO is None:
@@ -164,9 +192,14 @@ def get_platform_exceptions() -> dict[int, list[list[int]]]:
     """
     Get global variable PLATFORM.
     If PLATFORM is not initialized, read from platform.json and store in PLATFORM.
-    :return: Dictionary with platform information.
+    
+    :return: 
+        Dictionary with platform information.
+        
         Keys are station UIDs, and values are lists of lists of platform IDs.
+
         Each inner list represents a group of platforms that are on the same physical platform.
+        
         e.g. 
             "1032": [
                         [104290, 102320],
@@ -183,6 +216,7 @@ def get_platform() -> np.ndarray:
     """
     Get global variable PLATFORM. ["physical_platform_id", "node_id", "uid"]
     If PLATFORM is not initialized, read from platform.csv and store in PLATFORM.
+
     :return: Array of shape (n, 3) with columns:
         ["physical_platform_id", "node_id", "uid"].
     """
@@ -194,13 +228,17 @@ def get_platform() -> np.ndarray:
 
 def get_etd() -> np.ndarray:
     """
-    Get global variable ETD. ['pp_id', 'x', 'pdf', 'cdf']. 
+    Get global variable ETD.
     
     If ETD is not initialized, read from the latest version of the etd files.
 
-    Returns: 
-        np.ndarray: Array of shape (n, 4) with columns: ['pp_id', 'x', 'pdf', 'cdf'] \n
-        where `pp_id` is the physical platform ID, `x` is egress time index (0-500).
+    :return:
+        Array of shape (n, 4) with columns: ['pp_id', 'x', 'pdf', 'cdf'].
+        
+        - `pp_id`: The platform_uid.
+        - `x`: The ingress time index (0-500).
+        - `pdf`: The probability density function.
+        - `cdf`: The cumulative distribution function.
     """
     global ETD
     if ETD is None:
@@ -215,15 +253,18 @@ def get_etd() -> np.ndarray:
 
 def get_ttd() -> np.ndarray:
     """
-    Get global variable TTD. ['pp_id_min', 'pp_id_max', 'x', 'cdf']
+    Get global variable TTD. 
     
     If TTD is not initialized, read from the latest version of the ttd files.
     
-    Returns: 
-        np.ndarray: Array of shape (n, 4) with columns: ['pp_id_min', 'pp_id_max', 'x', 'cdf'] \n
-        where `pp_id_min` and `pp_id_max` are the min and max platform_uids of the two platforms involved in the transfer, \n
-        `x` is the transfer time index (0-500), and `cdf` is the cumulative distribution function. \n
-        Note that for platform_swap transfers, x only has one value as zero.
+    :return: 
+        Array of shape (n, 4) with columns: ['pp_id_min', 'pp_id_max', 'x', 'cdf'].
+        
+        - `pp_id_min` and `pp_id_max`: The min and max platform_uids of the two platforms involved in the transfer.
+        - `x`: The transfer time index (0-500).
+        - `cdf`: The cumulative distribution function.
+        
+        Note: For platform_swap transfers, `x` only has one value as zero.
     """
     global TTD
     if TTD is None:

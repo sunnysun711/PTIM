@@ -11,18 +11,31 @@ from src.walk_time_dis_calculator import WalkTimeDisModel
 
 def cal_entry_dis_all(wtd: WalkTimeDisModel = None, left: pd.DataFrame = None) -> pd.DataFrame:
     """
-    Calculate the entry walk distribution for all itineraries in `left`.
+    Calculate the entry walk distribution for all left itineraries.
 
-    Args:
-        wtd (WalkTimeDisModel, optional): WalkTimeDisModel instance.\n
-            Defaults to None (automatically created with the latest etd, ttd CSV files).
-        left (pd.DataFrame, optional): DataFrame of left itineraries.\n
-            Defaults to None (read from left.pkl file).\n
-            Expected columns: [`rid`, `iti_id`, `path_id`, `seg_id`, `train_id`, `board_ts`, `alight_ts`]
+    :param wtd: (optional) WalkTimeDisModel instance.
+        Defaults to None (automatically created with the latest etd, ttd CSV files).
+    :type wtd: WalkTimeDisModel, optional
 
-    Returns:
-        pd.DataFrame: DataFrame of entry walk distribution for all itineraries.\n
-        columns: [`rid`, `iti_id`, `path_id`, `seg_id`, `train_id`, `board_ts`, `alight_ts`, `entry_pp_id`, `ts1`, `entry_time`, `dis`]
+    :param left: (optional) DataFrame of left itineraries.
+        Defaults to None (read from left.pkl file).
+
+        Expected columns: [`rid`, `iti_id`, `path_id`, `seg_id`, `train_id`, `board_ts`, `alight_ts`]
+    :type left: pd.DataFrame, optional
+        
+    
+    :return: DataFrame of egress walk distribution for all left itineraries including the following columns:
+        
+        - `rid`: The ID of the transaction record.
+        - `iti_id`: The itinerary ID.
+        - `path_id`: The path ID.
+        - `board_ts`: The boarding timestamp.
+        - `entry_pp_id`: The physical platform ID of the entry platform.
+        - `ts1`: The tap-in time of the rid.
+        - `entry_time`: The entry walking time. (plus waiting time)
+        - `dis`: The distribution value of the entry time.
+        
+    :rtype: pd.DataFrame
     """
     if wtd is None:
         print("[INFO] Initializing WalkTimeDisModel for cal_entry_dis()...")
@@ -72,16 +85,28 @@ def cal_egress_dis_all(wtd: WalkTimeDisModel = None, left: pd.DataFrame = None) 
     """
     Calculate the egress walk distribution for all left itineraries.
 
-    Args:
-        wtd (WalkTimeDisModel, optional): WalkTimeDisModel instance. Defaults to None.\n
-            If wtd is None, create a new instance with the lastest etd, ttd csv files.
-        left (pd.DataFrame, optional): left dataframe. Defaults to None.\n
-            columns: [`rid`, `iti_id`, `path_id`, `seg_id`, `train_id`, `board_ts`, `alight_ts`]\n
-            If left is None, read from the left.pkl file.
+    :param wtd: (optional) WalkTimeDisModel instance.
+        Defaults to None (automatically created with the latest etd, ttd CSV files).
+    :type wtd: WalkTimeDisModel, optional
 
-    Returns:
-        pd.DataFrame: egress walk distribution for all left itineraries.\n
-        columns: [`rid`, `iti_id`, `path_id`, `alight_ts`, `egress_pp_id`, `ts2`, `egress_time`, `dis`]
+    :param left: (optional) DataFrame of left itineraries.
+        Defaults to None (read from left.pkl file).
+        
+        Expected columns: [`rid`, `iti_id`, `path_id`, `seg_id`, `train_id`, `board_ts`, `alight_ts`]
+    :type left: pd.DataFrame, optional
+
+    :return: DataFrame of egress walk distribution for all left itineraries including the following columns:
+        
+        - `rid`: The ID of the transaction record.
+        - `iti_id`: The itinerary ID.
+        - `path_id`: The path ID.
+        - `alight_ts`: The alighting timestamp.
+        - `egress_pp_id`: The physical platform ID of the egress platform.
+        - `ts2`: The tap-out time of the rid.
+        - `egress_time`: The egress walking time.
+        - `dis`: The distribution value of the egress time.
+        
+    :rtype: pd.DataFrame
     """
     if wtd is None:
         print("[INFO] Initializing WalkTimeDisModel for cal_egress_dis()...")
@@ -123,7 +148,6 @@ def cal_egress_dis_all(wtd: WalkTimeDisModel = None, left: pd.DataFrame = None) 
             pp_id=egress_pp_id, times=df_ps2pp_["egress_time"].values)
         left_last_seg.loc[df_ps2pp_.index, "dis"] = df_ps2pp_["dis"].values
 
-    # columns of left_last_seg: [rid, iti_id, path_id, alight_ts, egress_pp_id, ts2, egress_time, dis]
     return left_last_seg
 
 
@@ -131,16 +155,33 @@ def cal_transfer_dis_all(wtd: WalkTimeDisModel = None, left: pd.DataFrame = None
     """
     Calculate the transfer walk distribution for all itineraries in `left`.
 
-    Args:
-        wtd (WalkTimeDisModel, optional): WalkTimeDisModel instance.\n
-            Defaults to None (automatically created with the latest etd, ttd CSV files).
-        left (pd.DataFrame, optional): DataFrame of left itineraries.\n
-            Defaults to None (read from left.pkl file).\n
-            Expected columns: [`rid`, `iti_id`, `path_id`, `seg_id`, `train_id`, `board_ts`, `alight_ts`]
+    :param wtd: (optional) WalkTimeDisModel instance.
+        Defaults to None (automatically created with the latest etd, ttd CSV files).
+    :type wtd: WalkTimeDisModel, optional
 
-    Returns:
-        pd.DataFrame: DataFrame of transfer walk distribution for all itineraries.\n
-        columns: [`rid`, `iti_id`, `path_id`, `seg_id`, `train_id`, `board_ts`, `alight_ts`, `board_ts`, `transfer_time`, `transfer_type`, `pp_id_min`, `pp_id_max`, `dis`]
+    :param left: (optional) DataFrame of left itineraries.
+        Defaults to None (read from `left.pkl` file).
+        
+        Expected columns: [`rid`, `iti_id`, `path_id`, `seg_id`, `train_id`, `board_ts`, `alight_ts`].
+    :type left: pd.DataFrame, optional
+
+    :returns: DataFrame of transfer walk distribution for all itineraries 
+        including the following columns:
+        
+        - `rid`: The ID of the transaction record.
+        - `iti_id`: The itinerary ID.
+        - `path_id`: The path ID.
+        - `seg_id`: The segment ID. (seg_id of the alighting train)
+        - `train_id`: The ID of the train.
+        - `board_ts`: The boarding timestamp.
+        - `alight_ts`: The alighting timestamp.
+        - `transfer_time`: The calculated transfer time for the transfer link.
+        - `transfer_type`: The type of transfer (e.g., platform to platform).
+        - `pp_id_min`: The minimum physical platform ID.
+        - `pp_id_max`: The maximum physical platform ID.
+        - `dis`: The distribution value of the transfer time.
+
+    :rtype: pd.DataFrame
     """
     if wtd is None:
         print("[INFO] Initializing WalkTimeDisModel for cal_transfer_dis()...")
@@ -172,30 +213,36 @@ def cal_transfer_dis_all(wtd: WalkTimeDisModel = None, left: pd.DataFrame = None
             times_end=df_["transfer_time"].values
         )
         df.loc[df_.index, "dis"] = dis
-    # columns of df: [rid, iti_id, path_id, seg_id, alight_ts, board_ts, transfer_time, transfer_type, pp_id_min, pp_id_max, dis]
+
     return df
 
 
 def cal_dis_all(wtd: WalkTimeDisModel = None, left: pd.DataFrame = None) -> pd.DataFrame:
     """
     Calculate the entry, egress, and transfer walk distributions for all itineraries in `left`.
-    
+
     Approximately 33 seconds for the left with 46,637,884 rows. (PC)
 
-    Args:
-        wtd (WalkTimeDisModel, optional): WalkTimeDisModel instance.\n
-            Defaults to None (automatically created with the latest etd, ttd CSV files).
-        left (pd.DataFrame, optional): DataFrame of left itineraries.\n
-            Defaults to None (read from left.pkl file).\n
-            Expected columns: [`rid`, `iti_id`, `path_id`,`seg_id`, `train_id`, `board_ts`, `alight_ts`]
-
-    Returns:
-        pd.DataFrame: DataFrame of entry, egress, and transfer walk distributions for all itineraries. \n
-        columns: [`rid`, `iti_id`, `path_id`, `seg_id`, `t1`, `t2`, `pp_id1`, `pp_id2`, `time`, `dis`] \n
-        where for entry, `seg_id` is 0, `t1` is tap-in ts, `t2` is board ts, `pp_id1` is entry pp_id, `pp_id2` is 0; \n
-        for egress, `seg_id` is -1, `t1` is alight ts, `t2` is tap-out ts, `pp_id1` is 0, `pp_id2` is egress pp_id; \n
-        for transfer, `seg_id` is the transfer seg_id, `t1` is alight ts, `t2` is board ts, `pp_id1` is the min pp_id, `pp_id2` is the max pp_id.
+    :param wtd: (optional) WalkTimeDisModel instance.
+        Defaults to None (automatically created with the latest etd, ttd CSV files).
+    :type wtd: WalkTimeDisModel, optional
     
+    :param left: (optional) DataFrame of left itineraries.
+        Defaults to None (read from left.pkl file).
+        
+        Expected columns: [`rid`, `iti_id`, `path_id`, `seg_id`, `train_id`, `board_ts`, `alight_ts`].
+    :type left: pd.DataFrame, optional
+
+    :returns: DataFrame of entry, egress, and transfer walk distributions for all itineraries.
+        
+        Columns: [`rid`, `iti_id`, `path_id`, `seg_id`, `t1`, `t2`, `pp_id1`, `pp_id2`, `time`, `dis`]
+        
+        For entry, `seg_id` is 0, `t1` is tap-in ts, `t2` is board ts, `pp_id1` is entry pp_id, `pp_id2` is 0.
+        
+        For egress, `seg_id` is -1, `t1` is alight ts, `t2` is tap-out ts, `pp_id1` is 0, `pp_id2` is egress pp_id.
+        
+        For transfer, `seg_id` is the transfer seg_id, `t1` is alight ts, `t2` is board ts, `pp_id1` is the min pp_id, `pp_id2` is the max pp_id.
+    :rtype: pd.DataFrame
     """
     if wtd is None:
         print("[INFO] Initializing WalkTimeDisModel for cal_transfer_dis()...")
@@ -253,19 +300,36 @@ def cal_dis_all(wtd: WalkTimeDisModel = None, left: pd.DataFrame = None) -> pd.D
     return df
 
 
-def cal_penalty_all(penalties: dict[tuple[int, int, int], float], left: pd.DataFrame = None):
+def cal_penal_all(train_seg_penal: dict[tuple[int, int, int], float], left: pd.DataFrame = None):
     """
-    Args:
-        penalties (dict[tuple[int, int, int], float]): penalty dict. \n
-            {(train_id, board_ts, alight_ts): penalty_value (0 to 1 float)} \n
-            should get this variable from src.itinerary.build_penalty_dict()
-        left (pd.DataFrame, optional): DataFrame of left itineraries. \n
-            Defaults to None (read from left.pkl file). \n
-            Expected columns: [`rid`, `iti_id`, `path_id`,`seg_id`, `train_id`, `board_ts`, `alight_ts`]
+    Calculate penalties for all itineraries in `left` based on `train_seg_penal`.
 
-    Returns:
-        pd.DataFrame: DataFrame of left itineraries with penalty column added. \n
-            columns: [`rid`, `iti_id`, `path_id`,`seg_id`, `train_id`, `board_ts`, `alight_ts`, `penalty`]
+    :param train_seg_penal: A dictionary mapping a tuple of (train_id, board_ts, alight_ts) 
+        to a penalty value (float between 0 and 1).
+        
+        This variable should be obtained from `src.itinerary.build_penalty_dict()`.
+
+    :type train_seg_penal: dict[tuple[int, int, int], float]
+
+    :param left: (optional) DataFrame of left itineraries.
+        Defaults to None (read from `left.pkl` file).
+        
+        Expected columns: [`rid`, `iti_id`, `path_id`, `seg_id`, `train_id`, `board_ts`, `alight_ts`].
+        
+    :type left: pd.DataFrame, optional
+
+    :returns: DataFrame of left itineraries with an added penalty column including the following columns:
+        
+        - `rid`: The ID of the transaction record.
+        - `iti_id`: The itinerary ID.
+        - `path_id`: The path ID.
+        - `seg_id`: The segment ID. (correspond to in_vehicle links)
+        - `train_id`: The ID of the train.
+        - `board_ts`: The boarding timestamp.
+        - `alight_ts`: The alighting timestamp.
+        - `penalty`: The calculated penalty value for the segment.
+        
+    :rtype: pd.DataFrame
     """
     if left is None:
         left = read_(config.CONFIG["results"]["left"], show_timer=False)
@@ -278,18 +342,56 @@ def cal_penalty_all(penalties: dict[tuple[int, int, int], float], left: pd.DataF
     # 2. set left index to (train_id, board_ts, alight_ts),
     #    then run for loops of keys (t_id, b_ts, a_ts) to update:
     #    left.loc[(t_id, b_ts, a_ts), "penalty"] = value
-    for k, v in penalties.items():
+    for k, v in train_seg_penal.items():
         left.loc[k, "penalty"] = v
-    
+
     left.reset_index(inplace=True)
-    
+
     return left
+
+
+def cal_prob_all(dis: pd.DataFrame, penal: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calculate probabilities for all feasible itineraries with the provided
+    walk time distributions and train segment penalties.
+
+    :param dis: DataFrame of walk time distributions with columns:
+        
+        [`rid`, `iti_id`, `path_id`, `seg_id`, `t1`, `t2`, `pp_id1`, `pp_id2`, `time`, `dis`]
+        
+        Should be generated by `src.itinerary.cal_dis_all()`.
+    :type dis: pd.DataFrame
+    
+    :param penal: DataFrame of train segment penalties with columns:
+
+        [`rid`, `iti_id`, `path_id`, `seg_id`, `train_id`, `board_ts`, `alight_ts`, `penalty`]
+
+        Should be generated by `src.itinerary.cal_penalty_all()`.
+    :type penal: pd.DataFrame
+    
+    :returns: DataFrame of probabilities for all feasible itineraries with columns:
+
+        [`rid` (index), `iti_id` (index), `dis`, `penalty`, `dis_penaled`, `dis_penaled_sum`, `prob`]
+
+        The index is a MultiIndex of (`rid`, `iti_id`).
+    :rtype: pd.DataFrame
+    """
+    # index: (rid, iti_id) columns: dis
+    dis_prod = dis.groupby(["rid", "iti_id"])["dis"].prod()
+    # index: (rid, iti_id) columns: penalty
+    penalty_prod = penal.groupby(["rid", "iti_id"])["penalty"].prod()
+    # Combine the two Series into a DataFrame
+    df = pd.concat([dis_prod, penalty_prod], axis=1)
+    df["dis_penaled"] = df["dis"] * df["penalty"]
+    df["dis_penaled_sum"] = df.groupby(level=[0])["dis_penaled"].transform("sum")
+    df["prob"] = df["dis_penaled"] / df["dis_penaled_sum"]
+    return df  # index (rid, iti_id) columns: [dis, penalty, dis_penaled, dis_penaled_sum, prob]
 
 
 if __name__ == "__main__":
     import time
     config.load_config()
     a = time.time()
-    df = cal_dis_all()
+    dis = cal_dis_all()
+    dis.groupby(["rid", "iti_id"])["dis"].prod()
     print(time.time() - a)
-    

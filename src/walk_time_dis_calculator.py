@@ -98,6 +98,12 @@ class WalkTimeDisModel:
             - Egress (PDF)
             - Entry (CDF)
             - Transfer (CDF)
+
+        :param etd: (optional) Egress Time Distribution (ETD) data.
+        :type etd: np.ndarray, optional
+
+        :param ttd: (optional) Transfer Time Distribution (TTD) data.
+        :type ttd: np.ndarray, optional
         """
         # Load ETD and TTD
         self.etd: np.ndarray = etd if etd is not None else get_etd()
@@ -159,9 +165,10 @@ class WalkTimeDisModel:
         """
         General function to build lookup tables for pp_id -> distribution values.
 
-        Args:
-            column_idx (int): The column index to extract from self.etd (2=pdf, 3=cdf).
-            attr_name (str): The attribute name to save the result (e.g., 'pp_id2pdf_table').
+        :param column_idx: The column index to extract from self.etd (2=pdf, 3=cdf).
+        :type column_idx: int
+        :param attr_name: The attribute name to save the result (e.g., 'pp_id2pdf_table').
+        :type attr_name: str
         """
         lookup_table = {}
 
@@ -222,14 +229,22 @@ class WalkTimeDisModel:
         Retrieve egress PDF values for the given pp_id and times.
         If x is out of bounds, return 0.
 
-        Args:
-            pp_id (int): Physical platform ID to retrieve the egress distribution.
-            times (int | np.ndarray | pd.Series): Time(s) to retrieve PDF values.
-            ratio_ (bool): Whether to return the ratio of the PDF to the max PDF value. Default is True.
-            square_ (bool): Whether to square the output values. Default is True.
+        :param pp_id: Physical platform ID to retrieve the egress distribution.
+        :type pp_id: int
 
-        Returns:
-            float or np.ndarray: PDF value(s) corresponding to the input time(s).
+        :param times: Time(s) to retrieve PDF values.
+        :type times: int | np.ndarray | pd.Series
+
+        :param ratio_: Whether to return the ratio of the PDF to the max PDF value.
+        :type ratio_: bool, optional, default=True
+
+        :param square_: Whether to square the output values.
+        :type square_: bool, optional, default=False
+
+        :returns: PDF value(s) corresponding to the input time(s).
+        :rtype: float | np.ndarray
+
+        :raises Error: If no lookup table found for the given egress pp_id.
         """
         lookup_table = self.pp_id2pdf_table.get(pp_id, None)
         assert (
@@ -261,14 +276,20 @@ class WalkTimeDisModel:
         Retrieve egress PDF values for the given path_id and times.
         If x is out of bounds, return 0.
 
-        Args:
-            path_id (int): Path ID to retrieve the egress distribution.
-            times (int | np.ndarray | pd.Series): Time(s) to retrieve PDF values.
-            ratio_ (bool): Whether to return the ratio of the PDF to the max PDF value. Default is True.
-            square_ (bool): Whether to square the output values. Default is True.
+        :param path_id: Path ID to retrieve the egress distribution.
+        :type path_id: int
 
-        Returns:
-            float or np.ndarray: PDF value(s) corresponding to the input time(s).
+        :param times: Time(s) to retrieve PDF values.
+        :type times: int | np.ndarray | pd.Series
+
+        :param ratio_: Whether to return the ratio to the max PDF value.
+        :type ratio_: bool, optional, default=True
+
+        :param square_: Whether to square the output values.
+        :type square_: bool, optional, default=False
+
+        :returns: PDF value(s) corresponding to the input time(s).
+        :rtype: float | np.ndarray
         """
         egress_pp_id = self.path_id2egress_pp_id.get(path_id, None)
         assert (
@@ -286,13 +307,17 @@ class WalkTimeDisModel:
         """
         Look up time range deltas in the given lookup table.
 
-        Args:
-            lookup_table (np.ndarray): Lookup table containing CDF values.
-            t_start (int | np.ndarray | pd.Series): Start time(s) for lookup.
-            t_end (int | np.ndarray | pd.Series): End time(s) for lookup.
+        :param lookup_table: Lookup table containing CDF values.
+        :type lookup_table: np.ndarray
 
-        Returns:
-            float or np.ndarray: Time range delta(s) corresponding to the input time ranges.
+        :param t_start: Start time(s) for lookup.
+        :type t_start: int | np.ndarray | pd.Series
+
+        :param t_end: End time(s) for lookup.
+        :type t_end: int | np.ndarray | pd.Series
+
+        :returns: Time range delta(s) corresponding to the input time ranges.
+        :rtype: float | np.ndarray
         """
         t_start, t_end = np.atleast_1d(t_start), np.atleast_1d(t_end)
         assert (
@@ -324,13 +349,17 @@ class WalkTimeDisModel:
         Retrieve entry CDF values for the given pp_id and time ranges.
         If times_start or times_end is out of bounds, return 1.0 as CDF values.
 
-        Args:
-            pp_id (int): Physical platform ID to retrieve the entry distribution.
-            times_start (int | np.ndarray | pd.Series): Start time(s) to retrieve CDF values.
-            times_end (int | np.ndarray | pd.Series): End time(s) to retrieve CDF values.
+        :param pp_id: Physical platform ID to retrieve the entry distribution.
+        :type pp_id: int
 
-        Returns:
-            float or np.ndarray: CDF value(s) corresponding to the input time ranges.
+        :param times_start: Start time(s) to retrieve CDF values.
+        :type times_start: int | np.ndarray | pd.Series
+
+        :param times_end: End time(s) to retrieve CDF values.
+        :type times_end: int | np.ndarray | pd.Series
+
+        :returns: CDF value(s) corresponding to the input time ranges.
+        :rtype: float | np.ndarray
         """
         lookup_table = self.pp_id2cdf_table.get(pp_id, None)
         assert (
@@ -350,13 +379,17 @@ class WalkTimeDisModel:
         Retrieve entry CDF values for the given path_id and time ranges.
         If times_start or times_end is out of bounds, return 1.0 as CDF values.
 
-        Args:
-            path_id (int): Path ID to retrieve the entry distribution.
-            times_start (int | np.ndarray | pd.Series): Start time(s) to retrieve CDF values.
-            times_end (int | np.ndarray | pd.Series): End time(s) to retrieve CDF values.
+        :param path_id: Path ID to retrieve the entry distribution.
+        :type path_id: int
 
-        Returns:
-            float or np.ndarray: CDF value(s) corresponding to the input time ranges.
+        :param times_start: Start time(s) to retrieve CDF values.
+        :type times_start: int | np.ndarray | pd.Series
+
+        :param times_end: End time(s) to retrieve CDF values.
+        :type times_end: int | np.ndarray | pd.Series
+
+        :returns: CDF value(s) corresponding to the input time ranges.
+        :rtype: float | np.ndarray
         """
         entry_pp_id = self.path_id2entry_pp_id.get(path_id, None)
         assert (
@@ -376,14 +409,20 @@ class WalkTimeDisModel:
         Retrieve transfer CDF values for the given pp_id_min, pp_id_max, and time ranges.
         If times_start or times_end is out of bounds, return 1.0 as CDF values.
 
-        Args:
-            pp_id_min (int): The smaller physical platform ID to retrieve the transfer distribution.
-            pp_id_max (int): The larger physical platform ID to retrieve the transfer distribution.
-            times_start (int | np.ndarray | pd.Series): Start time(s) to retrieve CDF values.
-            times_end (int | np.ndarray | pd.Series): End time(s) to retrieve CDF values.
+        :param pp_id_min: The smaller physical platform ID to retrieve the transfer distribution.
+        :type pp_id_min: int
 
-        Returns:
-            float or np.ndarray: CDF value(s) corresponding to the input time ranges.
+        :param pp_id_max: The larger physical platform ID to retrieve the transfer distribution.
+        :type pp_id_max: int
+
+        :param times_start: Start time(s) to retrieve CDF values.
+        :type times_start: int | np.ndarray | pd.Series
+
+        :param times_end: End time(s) to retrieve CDF values.
+        :type times_end: int | np.ndarray | pd.Series
+
+        :returns: CDF value(s) corresponding to the input time ranges.
+        :rtype: float | np.ndarray
         """
         lookup_table = self.transfer_mima2cdf_table.get(
             (pp_id_min, pp_id_max), None
@@ -406,14 +445,20 @@ class WalkTimeDisModel:
         Retrieve transfer CDF values for the given path_id, seg_id, and time ranges.
         If times_start or times_end is out of bounds, return 1.0 as CDF values.
 
-        Args:
-            path_id (int): Path ID to retrieve the transfer distribution.
-            seg_id (int): Segment ID to retrieve the transfer distribution.
-            times_start (int | np.ndarray | pd.Series): Start time(s) to retrieve CDF values.
-            times_end (int | np.ndarray | pd.Series): End time(s) to retrieve CDF values.
+        :param path_id: Path ID to retrieve the transfer distribution.
+        :type path_id: int
 
-        Returns:
-            float or np.ndarray: CDF value(s) corresponding to the input time ranges.
+        :param seg_id: Segment ID to retrieve the transfer distribution.
+        :type seg_id: int
+
+        :param times_start: Start time(s) to retrieve CDF values.
+        :type times_start: int | np.ndarray | pd.Series
+
+        :param times_end: End time(s) to retrieve CDF values.
+        :type times_end: int | np.ndarray | pd.Series
+
+        :returns: CDF value(s) corresponding to the input time ranges.
+        :rtype: float | np.ndarray
         """
         rows = (self.path_seg2pp_id_mima["path_id"] == path_id) & (
             self.path_seg2pp_id_mima["seg_id"] == seg_id
@@ -433,10 +478,17 @@ def _test_feas_iti_dis_calculate(rid: int, iti_id: int, df_left: pd.DataFrame) -
     """
     Compute and print probability components for a given (rid, iti_id) feasible itinerary.
 
-    :param rid: passenger record ID
-    :param iti_id: itinerary ID
-    :param df_left: DataFrame of all feasible itineraries (filtered from 'left')
-    :return: [entry_dis, egress_dis, transfer_dis_product, egress_dis_square]
+    :param rid: Passenger record ID.
+    :type rid: int
+
+    :param iti_id: Itinerary ID.
+    :type iti_id: int
+
+    :param df_left: DataFrame of all feasible itineraries (filtered from 'left').
+    :type df_left: pd.DataFrame
+
+    :returns: List containing the entry, egress, transfer product, and egress square probabilities.
+    :rtype: list[float]
     """
     from src.utils import ts2tstr
     from src.globals import get_afc
@@ -486,8 +538,11 @@ def _test_feas_iti_dis_calculate_one_rid(rid: int, plot_seg_trains: bool = True)
     Evaluate and summarize all feasible itineraries for a given RID.
     Plot all segment-level trains after probability printing if enabled.
 
-    :param rid: passenger record ID
-    :param plot_seg_trains: whether to plot segment-level trains for visual inspection
+    :param rid: Passenger record ID.
+    :type rid: int
+
+    :param plot_seg_trains: Whether to plot segment-level trains for visual inspection.
+    :type plot_seg_trains: bool, optional, default=True
     """
     from src.utils import read_
     from src.passenger import _plot_check_feas_iti

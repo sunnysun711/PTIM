@@ -35,11 +35,15 @@ from src.utils import read_, save_
 def gen_node_from_sta(save_on: bool = False) -> pd.DataFrame:
     """
     Generate node information from the station file.
+
     UID is used for ground surfaces, NID * 10 + 0 is for downward platform, NID * 10 + 1 is for upward platform.
 
     :param save_on: Whether to save the result to a file. Default is False.
+    :type save_on: bool
+    
     :return: Dataframe with columns ('STATION_NID', 'STATION_UID', 'IS_TRANSFER', 'IS_TERMINAL', 'LINE_NID', 'updown') and
         index ('node_id').
+    :rtype: pd.DataFrame
     """
     df = read_(fn="STA", show_timer=False).reset_index()
     df1 = df.copy()
@@ -80,6 +84,7 @@ def gen_train_links_from_tt() -> pd.DataFrame:
     Median values are used for each link.
 
     Note that:
+
                                     number of passing trains    类型
         STATION_NID STATION_NID.next
         10727       10722               1                             ^
@@ -105,10 +110,12 @@ def gen_train_links_from_tt() -> pd.DataFrame:
         11026       11025             116                             *
         11021       11022             116                             *
         11023       11022             116                             *
+    
     So Number of passing trains is considered bigger than NO_MIN_PASS_TRAIN, defaults to 20.
 
 
     :return: Dataframe of indices (nid1, nid2, updown) and columns (count, time)
+    :rtype: pd.DataFrame
     """
     NO_MIN_PASS_TRAIN = 20
 
@@ -148,15 +155,28 @@ def gen_walk_links_from_nodes(
 ) -> pd.DataFrame:
     """
     Generate walk links from nodes.
+
     :param nodes: Dataframe with columns ('STATION_NID', 'STATION_UID', 'IS_TRANSFER', 'IS_TERMINAL', 'LINE_NID') and
-        index ('node_id'). Defaults to None, means reading from `read_(fn='node_info')`.
+        index ('node_id'). 
+        
+        Defaults to None, means reading from `read_(fn='node_info')`.
+    :type nodes: pd.DataFrame
     :param platform_swap_time: Defaults to 4 seconds.
+    :type platform_swap_time: float
     :param entry_time: Defaults to 15 seconds.
+    :type entry_time: float
     :param egress_time: Defaults to 15 seconds.
-    :param platform_exceptions: dict[uid, [[node_id, node_id], [node_id]]]. A dictionary where keys are station uids
-        and values are lists of connected platform node ids. Represents special platform connection cases.
+    :type egress_time: float
+    :param platform_exceptions: dict[uid, [[node_id, node_id], [node_id]]]. 
+        A dictionary where keys are station uids
+        and values are lists of connected platform node ids. 
+        
+        Represents special platform connection cases.
+        
         Defaults to None, means generated from `read_("platform.json")`.
+    :type platform_exceptions: dict[int, list[list[int]]]
     :return: Dataframe of columns ['node_id1', 'node_id2', 'link_type', 'link_weight'].
+    :rtype: pd.DataFrame
     """
     platform_exceptions = get_platform_exceptions() if platform_exceptions is None else platform_exceptions
     # print(platform_exceptions)
@@ -211,10 +231,15 @@ def gen_links(platform_swap_time: float = 3,
       between platforms or platforms and station gates.
 
     :param platform_swap_time: The time taken to swap platforms, default is 3 seconds.
+    :type platform_swap_time: float
     :param entry_time: The time taken to walk from station gates to the platforms, default is 15 seconds.
+    :type entry_time: float
     :param egress_time: The time taken to walk from a platform to the station gates, default is 15 seconds.
+    :type egress_time: float
     :param save_on: Whether to save the generated links to a file, default is False.
+    :type save_on: bool
     :return: Dataframe of columns ['node_id1', 'node_id2', 'link_type', 'link_weight'].
+    :rtype: pd.DataFrame
     """
     train_links = gen_train_links_from_tt().reset_index().drop(columns=["count"])
     train_links['node_id1'] = (train_links['nid1'] * 10).astype(int)
@@ -237,13 +262,14 @@ def gen_links(platform_swap_time: float = 3,
 
 
 def gen_platforms() -> pd.DataFrame:
-    """Generate physical platforms from the exceptions provided in platform.json and the default rules
+    """
+    Generate physical platforms from the exceptions provided in platform.json and the default rules
     that node_ids sharing the same LINE_NID use the same physical platform.
         
     The physical platform id is generated as id + uid * 100, where uid is the station uid.
     
-    Returns:
-        pd.DataFrame: Dataframe with columns ['physical_platform_id', 'node_id', 'uid'].
+    :return: Dataframe with columns ['physical_platform_id', 'node_id', 'uid'].
+    :rtype: pd.DataFrame
     """
     platform_excep = get_platform_exceptions()
     nodes = get_node_info().dropna(subset=["LINE_NID"])[["node_id", "STATION_UID", "LINE_NID"]].set_index("node_id")  # excluding ground nodes
@@ -276,7 +302,9 @@ class ChengduMetro:
 
         :param nodes: Dataframe of columns ['node_id' (index), 'STATION_NID', 'STATION_UID', 'IS_TRANSFER',
             'IS_TERMINAL', 'LINE_NID']
+        :type nodes: pd.DataFrame
         :param links: Dataframe of columns ['node_id1', 'node_id2', 'link_type', 'link_weight']
+        :type links: pd.DataFrame
         """
         self.nodes = nodes  # 'node_id' (index), 'STATION_NID', 'STATION_UID', 'IS_TRANSFER', 'IS_TERMINAL', 'LINE_NID'
 
@@ -318,6 +346,7 @@ class ChengduMetro:
         Get a dictionary mapping NID to UID.
 
         :return: A dictionary with NID as keys and UID as values.
+        :rtype: dict[int, int]
         """
         _df = self.nodes[["STATION_NID", "STATION_UID"]].drop_duplicates().set_index("STATION_NID")
         return _df["STATION_UID"].to_dict()
@@ -327,6 +356,7 @@ class ChengduMetro:
         Get a list of unique UIDs.
 
         :return: An iterable of unique UIDs.
+        :rtype: Iterable[int]
         """
         # uids = sorted(self.nodes['STATION_UID'].to_list())
         # return set(uids)
@@ -347,6 +377,7 @@ class ChengduMetro:
         A simple networkx based plotting function for metro network.
 
         :param coordinates: Dataframe containing node coordinates. columns ["station_nid", "x", "y"]
+        :type coordinates: pd.DataFrame
         """
         coordinates = coordinates.set_index("station_nid")
         coordinates['uid'] = self.nid2uid
@@ -420,9 +451,13 @@ class ChengduMetro:
         Get a list of link types, passing lines, and updown directions for a path.
 
         Consecutive links of the same lines are not merged here. Use compress_passing_info for merged results.
+
         :param path: list of node_id.
+        :type path: list[int]
         :return: list of linke types, passing lines and updown directions.
+            
             For e.g. [(type1, line1, upd1), (type2, line2, upd2), ...].
+        :rtype: list[tuple[str, int, int]]
         """
         passing_info = []
         for i, j in zip(path[:-1], path[1:]):
@@ -445,17 +480,20 @@ class ChengduMetro:
         and adding the appropriate information for each link between them.
 
         :param path: A list of node IDs representing the path through the metro network.
+        :type path: list[int]
         :param path_id: A unique identifier for the path, used for sorting and distinguishing between different paths.
+        :type path_id: int
 
         :return: A list of lists, where each inner list represents a segment of the path and contains the following
             information:
-            - : The unique ID for the path.
-            - : The pathvia ID, used for sorting the segments.
-            - : The starting node ID of the segment.
-            - : The ending node ID of the segment.
-            - : The type of the link (e.g., "entry", "egress", "platform_swap", "in_vehicle").
-            - : The line number associated with the segment.
-            - : The direction of the link (1 for upward, -1 for downward).
+
+            - `path_id`: The unique ID for the path.
+            - `pv_id`: The pathvia ID, used for sorting the segments.
+            - `node_id1`: The starting node ID of the segment.
+            - `node_id2`: The ending node ID of the segment.
+            - `link_type`: The type of the link (e.g., "entry", "egress", "platform_swap", "in_vehicle").
+            - `line_nid`: The line number associated with the segment.
+            - `updown`: The direction of the link (1 for upward, -1 for downward).
         """
         passing_info_arr = []
         cur_line_first_sec = None
@@ -487,7 +525,9 @@ class ChengduMetro:
         Compress the passing information into a more compact form.
 
         :param passing_info: List of tuples containing link types, passing lines, and updown directions.
+        :type passing_info: list[tuple[str, int, int]] (optional)
         :param path: List of node id. Default to None, if both provided, use passing_info first.
+        :type path: list[int] (optional)
         :return: Compressed list of str. For e.g. ['line1|upd1|number_of_sections1', ...].
         """
         if passing_info is None:
@@ -536,9 +576,13 @@ class ChengduMetro:
         Cut off at either `max_length` or `k`.
 
         :param shortest_path: List of node_id for the shortest path.
+        :type shortest_path: list[int]
         :param shortest_path_length: Length of the shortest path.
+        :type shortest_path_length: float
         :param max_length: Maximum length of the k shortest path.
+        :type max_length: float
         :return: List of tuples containing shortest path lengths and shortest paths.
+        :rtype: tuple[list[float], list[list[int]]]
         """
         source, target = shortest_path[0], shortest_path[-1]
         lengths, paths = [shortest_path_length], [shortest_path]
@@ -715,13 +759,20 @@ class ChengduMetro:
         ETA: ~ 850 seconds (2025-04-20 PC i9-13900K)
 
         :param k: Number of shortest paths to find. Default to 10.
+        :type k: int (optional)
         :param theta1: Relative tolerance for max path length.
+        :type theta1: float (optional)
         :param theta2: Absolute tolerance for max path length.
+        :type theta2: float (optional)
         :param transfer_deviation: Max allowed deviation in transfer count.
+        :type transfer_deviation: int (optional)
         :param n_jobs: Number of parallel workers. -1 means using all processors.
+        :type n_jobs: int (optional)
         :return: Path and pathvia dataframes.
-            Path dataframe columns: ["path_id", "length", "transfer_cnt", "path_str"]
-            Pathvia dataframe columns: ["path_id", "pv_id", "node_id1", "node_id2", "link_type", "line", "updown"]
+            
+            - Path dataframe columns: ["path_id", "length", "transfer_cnt", "path_str"]
+            - Pathvia dataframe columns: ["path_id", "pv_id", "node_id1", "node_id2", "link_type", "line", "updown"]
+        :rtype: tuple[pd.DataFrame, pd.DataFrame]
         """
         uid_list = self._get_uids()  # all ground nodes
         print(f"[INFO] Start finding K-shortest paths using {n_jobs} threads...")

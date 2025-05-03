@@ -15,15 +15,24 @@ def penal_func(x: float | np.ndarray, cap: float, cap_max: float, type_: str = "
     """
     Calculate the congestion penalty.
 
-    Args:
-        x: The load of the train.
-        cap: The capacity of the train.
-        cap_max: The maximum capacity of the train.
-        type_: The type of the congestion penalty.
-        k: The k value of the congestion penalty.
+    :param x: The load of the train.
+    :type x: float | np.ndarray
+    :param cap: The capacity of the train.
+    :type cap: float
+    :param cap_max: The maximum capacity of the train.
+    :type cap_max: float
+    :param type_: The type of the congestion penalty.
+    :type type_: str, optional, default="x"
+    :param k: The k value of the congestion penalty.
+    :type k: float, optional, default=None
 
-    Returns:
-        The congestion penalty.
+    :return: The congestion penalty.
+    :rtype: float | np.ndarray
+
+    Example:
+    --------
+    >>> penal_func(1845, 1680.0, 1980.0, type_="x")
+    0.5
     """
     x = np.atleast_1d(x)
     penal: np.ndarray = ...
@@ -35,13 +44,15 @@ def build_penalty_dict(overload_train_section: dict[int, np.ndarray]) -> dict[tu
     Build a dict of {(train_id, board_ts, alight_ts): penalty_value (0 to 1 float)}
     from the overload train section dict.
 
-    Args:
-        overload_train_section: The overload train section dict. {train_id: np.ndarray} \n
-            columns are: ['sta1_nid', 'dep_ts','sta2_nid', 'arr_ts', 'load'] (only overload sections) \n
-            should get this variable from src.timetable.find_overload_train_section()
+    :param overload_train_section: The overload train section dict. {train_id: np.ndarray} 
+        
+        columns are: ['sta1_nid', 'dep_ts','sta2_nid', 'arr_ts', 'load'] (only overload sections) 
+        
+        should generated from `src.timetable.find_overload_train_section()`
+    :type overload_train_section: dict[int, np.ndarray]
 
-    Returns:
-        The penalty dict.
+    :return: The penalty dict.
+    :rtype: dict[tuple[int, int, int], float]
     """
     penalty_dict: dict[tuple[int, int, int], float] = {}
 

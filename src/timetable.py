@@ -12,9 +12,10 @@ def get_ti2c() -> dict[int, tuple[float, float]]:
     """
     Get train_id to capacity mapper. Including capacities of normal passengers and commuters.
     
-    Returns:
-        dict[int, tuple[float, float]]: train_id to capacity mapper.
+    :return: 
+        train_id to capacity mapper.
         {train_id: (cap, cap_max)}
+    :rtype: dict[int, tuple[float, float]]
     """
     global TI2C
     if TI2C is None:
@@ -48,17 +49,20 @@ def get_ti2c() -> dict[int, tuple[float, float]]:
 def convert_load_to_density(data: np.ndarray, train_type: str = "a") -> np.ndarray:
     """
     Calculate SPD (Standing Passenger Density) based on in-vehicle passenger number.
+
     Used a trick to set less-than-0 value to 0 without processing np.NaN values in the array
+        
         def compare_nan_array(func, a, thresh):
             out = ~np.isnan(a)
             out[out] = func(a[out] , thresh)
             return out
-    Args:
-        data (np.ndarray): passenger count on trains,
-        train_type (str, optional): string, "a" or "b". Defaults to "a".
-
-    Returns:
-        np.ndarray: SPD of the train, same shape as `data`.
+    
+    :param data: passenger count on trains
+    :type data: np.ndarray
+    :param train_type: string, "a" or "b", defaults to "a"
+    :type train_type: str, optional
+    :return: SPD of the train, same shape as `data`
+    :rtype: np.ndarray
     
     Example:
         >>> data = np.array([100, 200, 300, 400, 500, 600, 700, 800, 900, 1000])
@@ -82,15 +86,19 @@ def calculate_train_load_profile(train_id: int, board_records: np.ndarray = None
     """
     Calculate train load for a given train_id.
     
-    Args:
-        train_id (int): train_id
-        board_records (np.ndarray): boarded records from assigned pkl files,
-            columns are: [board_ts, alight_ts].
-            Default is None, which will read and process from all assigned_*.pkl files.
+    :param train_id: 
+    :type train_id: int
+
+    :param board_records: boarded records from assigned pkl files, columns are: [board_ts, alight_ts]
+        
+        Default is None, which will read and process from all assigned_*.pkl files.
+    :type board_records: np.ndarray, optional
     
-    Returns:
-        np.ndarray: columns are: ['sta1_nid', 'dep_ts','sta2_nid', 'arr_ts', 'load']
-            where 'load' is the number of passengers on the train in the section.
+    :return:
+        columns are: ['sta1_nid', 'dep_ts','sta2_nid', 'arr_ts', 'load']
+
+        where 'load' is the number of passengers on the train in the section.
+    :rtype: np.ndarray
     """
     if board_records is None:
         assigned = read_all(
@@ -130,16 +138,20 @@ def find_overload_train_section(assigned: pd.DataFrame = None) -> dict[int, np.n
     """
     Find the overload train, section pairs.
 
-    Args:
-        assigned (pd.DataFrame, optional): assigned dataframe. Defaults to None. \n
-            columns are: [`rid`, `iti_id`, `path_id`, `seg_id`, `train_id`, `board_ts`, `alight_ts`]
+    :param assigned: assigned trajectory dataframe. Defaults to None.
+        
+        Expected columns: [`rid`, `iti_id`, `path_id`, `seg_id`, `train_id`, `board_ts`, `alight_ts`]
+    :type assigned: pd.DataFrame, optional
 
-    Returns:
-        dict[int, np.ndarray]: Dictionary mapping train_id to np.ndarray, \n
-            columns are: [`sta1_nid`, `dep_ts`, `sta2_nid`, `arr_ts`, `load`] \n
-            where `load` is the number of passengers on the train in the section. \n
-            Only overloaded train_id will be included in the dictionary. \n
-            Only overloaded sections will be included in the np.ndarray.
+    :return: Dictionary mapping train_id to np.ndarray, columns are: 
+        
+        [`sta1_nid`, `dep_ts`, `sta2_nid`, `arr_ts`, `load`]
+        
+        where `load` is the number of passengers on the train in the section.
+        
+        Only overloaded train_id will be included in the dictionary.
+
+        Only overloaded sections will be included in the np.ndarray.
     """
     if assigned is None:
         assigned = read_all(
