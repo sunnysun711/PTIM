@@ -34,12 +34,26 @@ from src.utils import ts2tstr, save_, tqdm_joblib
 
 def find_trains(nid1: int, nid2: int, ts1: int, ts2: int, line: int, upd: int) -> list[tuple[int, int, int]]:
     """
-    Find trains, board_ts, alight_ts for nid pairs within ts range.
-    Board_ts is obtained from departure_ts, alight_ts from arrive_ts.
-
-    :return: [(train_id, board_ts, alight_ts), ...]
+    Find available trains between two stations within a time window.
+    
+    :param nid1: The from station_nid
+    :type nid1: int
+    :param nid2: The to station_nid
+    :type nid2: int
+    :param ts1: The start timestamp
+    :type ts1: int
+    :param ts2: The end timestamp
+    :type ts2: int
+    :param line: The line_nid
+    :type line: int
+    :param upd: The updown direction (1 for down, -1 for up)
+    :type upd: int
+    :raises Assertion: If ts1 is not smaller than ts2
+    
+    :return: Available trains with the format [(train_id, board_ts, alight_ts), ...]
     :rtype: list[tuple[int, int, int]]
     """
+    
     assert ts1 < ts2, f"ts1 should be smaller than ts2: {ts1}, {ts2}"
 
     # filter line
@@ -362,6 +376,18 @@ def find_feas_iti_all(save_feas_iti: bool = True, save_afc_no_iti: bool = True) 
 
 
 def process_afc_chunk(chunk: np.ndarray, k_pv_dict: dict) -> list[list]:
+    """
+    process a chunk of afc data.
+
+    :param chunk: afc data.
+    :type chunk: np.ndarray
+    :param k_pv_dict: k path dictionary mapping node pairs to k path value matrices.
+    :type k_pv_dict: dict
+    :return: List of feasible itinerary segments. 
+        
+        Each list contains: [rid, iti_id, path_id, seg_id, train_id, board_ts, alight_ts]
+    :rtype: list[list]
+    """
     results = []
     for rid, uid1, ts1, uid2, ts2 in chunk:
         k_pv = k_pv_dict[(uid1, uid2)]
@@ -450,7 +476,16 @@ def find_feas_iti_all_parallel(save_feas_iti: bool = True, save_afc_no_iti: bool
 
 
 def _plot_check_feas_iti(rid: int = None, print_on:bool=True):
-    """Test function for feasible itineraries found."""
+    """
+    Test function for plotting feasible segment trains and feasible itineraries for a given rid.
+    Optionally print the rid, uid1, uid2, ts1, ts2 and k_pv.
+
+    :param rid: The specified rid, defaults to None, in which case a random rid is selected.
+    :type rid: int, optional, default=None
+    :param print_on: Whether to print out AFC and K_PV info, defaults to True
+    :type print_on: bool, optional, default=True
+    """
+    # Test function for feasible itineraries found.
     from src.passenger import plot_seg_trains, find_feas_iti
     from src.globals import get_afc, get_k_pv_dict
 

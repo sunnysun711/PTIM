@@ -6,19 +6,14 @@ import time
 import pandas as pd
 
 from src import config
-from src.globals import get_afc, get_k_pv_dict, get_tt, get_platform
-
-
-# from src.walk_time_dis import *
+from src.timetable import TI2C
 
 
 def test1():
-    
     ...
 
 
 def test2():
-    
     ...
 
 
@@ -32,9 +27,6 @@ def test4():
 
 def test5():
     ...
-
-
-
 
 
 def plot_timetable_plotly(TT: pd.DataFrame, line_nid: int = 1, updown: list = [1, -1],
@@ -163,25 +155,25 @@ def plot_timetable_plotly(TT: pd.DataFrame, line_nid: int = 1, updown: list = [1
 if __name__ == "__main__":
     config.load_config()
 
-    # print("=" * 100)
-    # print("Test 1".center(100, " "))
-    # print("=" * 100)
+    print("=" * 100)
+    print("Test 1".center(100, " "))
+    print("=" * 100)
     # test1()
 
-    # print("=" * 100)
-    # print("Test 2".center(100, " "))
-    # print("=" * 100)
-    # test2()
+    print("=" * 100)
+    print("Test 2".center(100, " "))
+    print("=" * 100)
+    test2()
 
-    # print("=" * 100)
-    # print("Test 3".center(100, " "))
-    # print("=" * 100)
-    # test3()
+    print("=" * 100)
+    print("Test 3".center(100, " "))
+    print("=" * 100)
+    test3()
 
-    # print("=" * 100)
-    # print("Test 4".center(100, " "))
-    # print("=" * 100)
-    # test4()
+    print("=" * 100)
+    print("Test 4".center(100, " "))
+    print("=" * 100)
+    test4()
 
     print("=" * 100)
     print("Test 5".center(100, " "))

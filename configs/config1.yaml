@@ -51,6 +51,8 @@ parameters:
   feas_iti_cnt_limit: 1000 # more than this number, this rid goes to stashed.pkl
   # parameters for egress
   distribution_type: "kde" # "kde", "gamma", or "lognorm"
+  # parameters for penalty
+  penalty_type: "x" # ["x", "x2", "x2_", "y2", "y2_"] or a number for normal CDF penalty
   # parameters for trajectory
   strategy: "random" # "random" or "greedy"
   step_size: 100

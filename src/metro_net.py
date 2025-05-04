@@ -819,7 +819,7 @@ class ChengduMetro:
         try:
             s_lengths, s_paths = nx.single_source_dijkstra(G=self.G, source=o_uid)
         except Exception as e:
-            print(f"[ERROR] Dijkstra failed for origin {o_uid}: {e}")
+            print(f"\033[31m[ERROR] Dijkstra failed for origin {o_uid}: {e}\033[0m")
             return path_list, pathvia_list
 
         for d_uid in uid_list:
