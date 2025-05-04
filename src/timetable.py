@@ -168,8 +168,10 @@ def find_overload_train_section(assigned: pd.DataFrame = None) -> dict[int, np.n
             continue
 
         # ['sta1_nid', 'dep_ts','sta2_nid', 'arr_ts', 'load']
+        board_records_this_train = assigned[assigned["train_id"] == train_id][[
+            "board_ts", "alight_ts"]].values
         load_arr = calculate_train_load_profile(
-            train_id, assigned[assigned["train_id"] == train_id])
+            train_id, board_records=board_records_this_train)
         if np.all(load_arr[:, -1] < cap):  # section passengers less than capacity, skip
             continue
 
