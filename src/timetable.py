@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 from src import config
-from src.utils import ts2tstr, tstr2ts, read_all
+from src.utils import read_all
 from src.globals import get_tt
 
 TI2C: dict[int, tuple[float, float]] = None
@@ -21,7 +21,6 @@ def get_ti2c() -> dict[int, tuple[float, float]]:
     global TI2C
     if TI2C is None:
         tt = get_tt()[:, :3]  # ["TRAIN_ID", "STATION_NID", "LINE_NID", ... ]
-        train_ids = np.unique(tt[:, 0])
         typeA_cap = config.CONFIG["parameters"]["TRAIN_A_AREA"] * \
             config.CONFIG["parameters"]["STD_NORMAL"] + \
             config.CONFIG["parameters"]["TRAIN_A_SEAT"]
@@ -36,7 +35,7 @@ def get_ti2c() -> dict[int, tuple[float, float]]:
             config.CONFIG["parameters"]["TRAIN_B_SEAT"]
 
         TI2C = {}
-        for train_id in train_ids:
+        for train_id in np.unique(tt[:, 0]):
             line_nid = tt[tt[:, 0] == train_id][0, 2]
             if line_nid in config.CONFIG["parameters"]["A_LINES"]:
                 TI2C[train_id] = (typeA_cap, typeA_cap_max)
@@ -45,6 +44,15 @@ def get_ti2c() -> dict[int, tuple[float, float]]:
             else:
                 raise ValueError(f"line_nid {line_nid} not supported!")
     return TI2C
+
+
+def reset_ti2c():
+    """
+    Reset TI2C to None.
+    Used for testing.
+    """
+    global TI2C
+    TI2C = None
 
 
 def convert_load_to_density(data: np.ndarray, train_type: str = "a") -> np.ndarray:
@@ -142,7 +150,7 @@ def find_overload_train_section(assigned: pd.DataFrame = None) -> dict[int, np.n
     :param assigned: assigned trajectory dataframe. Defaults to None.
 
         Expected columns: [`rid`, `iti_id`, `path_id`, `seg_id`, `train_id`, `board_ts`, `alight_ts`]
-    :type assigned: pd.DataFrame, optional
+    :type assigned: pd.DataFrame, optional, default=None
 
     :return: Dictionary mapping train_id to np.ndarray, columns are: 
 
@@ -161,8 +169,6 @@ def find_overload_train_section(assigned: pd.DataFrame = None) -> dict[int, np.n
     res: dict[int, np.ndarray] = {}
     for train_id, board_counts in assigned["train_id"].value_counts().items():
         cap, cap_max = get_ti2c()[train_id]
-        # to test this function, override cap and cap_max with manual values
-        # cap, cap_max = 500, 800
 
         if board_counts < cap:  # all boarded less than normal capacity, skip
             continue
@@ -172,7 +178,7 @@ def find_overload_train_section(assigned: pd.DataFrame = None) -> dict[int, np.n
             "board_ts", "alight_ts"]].values
         load_arr = calculate_train_load_profile(
             train_id, board_records=board_records_this_train)
-        if np.all(load_arr[:, -1] < cap):  # section passengers less than capacity, skip
+        if np.all(load_arr[:, -1] <= cap):  # section passengers less than capacity, skip
             continue
 
         if np.any(load_arr[:, -1] > cap_max):
@@ -211,6 +217,8 @@ def plot_timetable(li: int = 2, upd: list = None, show_load=True, save_subfolder
     from matplotlib import pyplot as plt
     from matplotlib.collections import LineCollection
     from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+    from src.utils import ts2tstr, tstr2ts
 
     # initialize
     upd = [1, -1] if upd is None else upd
@@ -337,15 +345,16 @@ def plot_timetable(li: int = 2, upd: list = None, show_load=True, save_subfolder
 
 
 def plot_timetable_all(save_subfolder: str, separate_upd: bool = False, assigned: pd.DataFrame = None):
-    
+
     saving_dir = config.CONFIG["figure_folder"] + "/" + save_subfolder
     if save_subfolder and not os.path.exists(saving_dir):
         os.makedirs(saving_dir)
-    
+
     print(f"[INFO] Plotting timetables and saving figures to {saving_dir}...")
-    
-    assigned = read_all(config.CONFIG["results"]["assigned"], show_timer=False) if assigned is None else assigned
-    
+
+    assigned = read_all(config.CONFIG["results"]["assigned"],
+                        show_timer=False) if assigned is None else assigned
+
     for line in [1, 2, 3, 4, 7, 10]:
         print(f"[INFO] Plotting timetable for Line {line}...")
         if separate_upd:
@@ -356,10 +365,11 @@ def plot_timetable_all(save_subfolder: str, separate_upd: bool = False, assigned
         else:
             plot_timetable(
                 li=line, upd=[-1, 1], show_load=True, save_subfolder=save_subfolder, assigned=assigned)
-    
 
 
 if __name__ == '__main__':
     config.load_config()
-    
-    plot_timetable_all("TT0")
+
+    # plot_timetable_all("TT0")
+    overload_info = find_overload_train_section()
+    print(overload_info)
