@@ -81,7 +81,6 @@ import pandas as pd
 
 from src import config
 from src.globals import get_etd, get_ttd, get_k_pv, get_platform
-from src.utils import read_all
 from src.walk_time_filter import get_path_seg_to_pp_ids
 
 
@@ -256,10 +255,12 @@ class WalkTimeDisModel:
         max_x = lookup_table.shape[0] - 1
         valid_mask = (times >= 0) & (times <= max_x)
 
+        epsilon = 1e-100
         output = np.zeros(times.shape)
         output[valid_mask] = lookup_table[times[valid_mask].astype(int)]
+        output += epsilon
         if ratio_:
-            output /= np.max(lookup_table)
+            output /= np.max(lookup_table) + epsilon
         if square_:
             output **= 2
 
@@ -295,7 +296,7 @@ class WalkTimeDisModel:
         assert (
             egress_pp_id is not None
         ), f"Egress physical platform ID not found for path {path_id}."
-        self.compute_egress_pdf_from_pp(egress_pp_id, times, ratio_, square_)
+        return self.compute_egress_pdf_from_pp(egress_pp_id, times, ratio_, square_)
         
 
     def _lookup_time_range_deltas(
@@ -526,7 +527,7 @@ def _test_feas_iti_dis_calculate(rid: int, iti_id: int, df_left: pd.DataFrame) -
     egress_dis = wtdc.compute_egress_pdf(
         path_id, ts2 - df.iloc[-1, 6], ratio_=True, square_=False)
     egress_dis_square = wtdc.compute_egress_pdf(
-        path_id, ts2 - df.iloc[-1, 6], square_=True, ratio_=True)
+        path_id, ts2 - df.iloc[-1, 6], ratio_=True, square_=True)
     print(f"\tEgress : {to_str(df.iloc[-1, 6])} -> {to_str(ts2)} "
           f"({ts2 - df.iloc[-1, 6]:4}) | {egress_dis:.6f} | {egress_dis_square:.6f}")
 
@@ -563,18 +564,18 @@ def _test_feas_iti_dis_calculate_one_rid(rid: int, plot_seg_trains: bool = True)
     results = np.array(results)
 
     # Print nicely
-    np.set_printoptions(
-        precision=6,
-        suppress=True,
-        linewidth=180,
-        threshold=np.inf,
-        floatmode='maxprec_equal'
-    )
-    pd.set_option('display.precision', 6)
-    pd.set_option('display.float_format', lambda x: '%.6f' % x)
-    pd.set_option('display.width', 180)
-    pd.set_option('display.max_rows', None)
-    pd.set_option('display.max_columns', None)
+    # np.set_printoptions(
+    #     precision=6,
+    #     suppress=True,
+    #     linewidth=180,
+    #     threshold=np.inf,
+    #     floatmode='maxprec_equal'
+    # )
+    # pd.set_option('display.precision', 6)
+    # pd.set_option('display.float_format', lambda x: '%.6f' % x)
+    # pd.set_option('display.width', 180)
+    # pd.set_option('display.max_rows', None)
+    # pd.set_option('display.max_columns', None)
 
     df = pd.DataFrame(results, columns=[
                       "entry_cdf", "egress_pdf", "trans_cdf_prod", "egress_pdf2"])
@@ -591,6 +592,6 @@ def _test_feas_iti_dis_calculate_one_rid(rid: int, plot_seg_trains: bool = True)
 
 if __name__ == "__main__":
     config.load_config()
-    _test_feas_iti_dis_calculate_one_rid(rid=None)  # 1723090
+    _test_feas_iti_dis_calculate_one_rid(rid=903630)  # 1723090
 
     pass
