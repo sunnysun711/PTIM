@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 from src import config
-from src.utils import read_, read_all
+from src.utils import read_
 from src.globals import get_k_pv, get_platform, get_afc, get_etd, get_ttd
 from src.walk_time_filter import get_path_seg_to_pp_ids, get_transfer_from_feas_iti
 from src.walk_time_dis_calculator import WalkTimeDisModel
@@ -300,23 +300,25 @@ def cal_dis_all(wtd: WalkTimeDisModel = None, left: pd.DataFrame = None) -> pd.D
     return df
 
 
-def cal_penal_all(train_seg_penal: dict[tuple[int, int, int], float], left: pd.DataFrame = None):
+def cal_penal_all(penal_df: pd.DataFrame, left: pd.DataFrame = None):
     """
-    Calculate penalties for all itineraries in `left` based on `train_seg_penal`.
+    Calculate penalties for all itineraries in `left` based on `penal_df`.
 
-    :param train_seg_penal: A dictionary mapping a tuple of (train_id, board_ts, alight_ts) 
+    :param penal_df: A DataFrame mapping a tuple of (train_id, board_ts, alight_ts) 
         to a penalty value (float between 0 and 1).
         
-        This variable should be obtained from `src.itinerary.build_penalty_dict()`.
-
-    :type train_seg_penal: dict[tuple[int, int, int], float]
+        Expected columns: [`train_id`, `board_ts`, `alight_ts`, `penalty`]
+        
+        This variable should be obtained from `src.itinerary.build_penalty_df()`.
+    
+    :type penal_df: pd.DataFrame
 
     :param left: (optional) DataFrame of left itineraries.
         Defaults to None (read from `left.pkl` file).
         
         Expected columns: [`rid`, `iti_id`, `path_id`, `seg_id`, `train_id`, `board_ts`, `alight_ts`].
         
-    :type left: pd.DataFrame, optional
+    :type left: pd.DataFrame, optional, default=None
 
     :returns: DataFrame of left itineraries with an added penalty column including the following columns:
         
@@ -333,21 +335,11 @@ def cal_penal_all(train_seg_penal: dict[tuple[int, int, int], float], left: pd.D
     """
     if left is None:
         left = read_(config.CONFIG["results"]["left"], show_timer=False)
-    left["penalty"] = 1.0
-    left.set_index(["train_id", "board_ts", "alight_ts"], inplace=True)
 
-    # 1. build a dict of {(train_id, board_ts, alight_ts): penalty_value (0 to 1 float)}
-    #    received from src.itinerary.build_penalty_dict() -> penalties.
+    df = pd.merge(left=left, right=penal_df, on=["train_id", "board_ts", "alight_ts"], how="left")
+    df["penalty"].fillna(1.0, inplace=True)
 
-    # 2. set left index to (train_id, board_ts, alight_ts),
-    #    then run for loops of keys (t_id, b_ts, a_ts) to update:
-    #    left.loc[(t_id, b_ts, a_ts), "penalty"] = value
-    for k, v in train_seg_penal.items():
-        left.loc[k, "penalty"] = v
-
-    left.reset_index(inplace=True)
-
-    return left
+    return df
 
 
 def cal_prob_all(dis: pd.DataFrame, penal: pd.DataFrame) -> pd.DataFrame:
