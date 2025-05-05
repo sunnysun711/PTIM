@@ -41,6 +41,7 @@ use_existing:
   network: true
   itinerary: true
   trajectory: true
+  walk_times: true
 
 parameters:
   # parameters for path

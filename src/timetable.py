@@ -299,6 +299,7 @@ def plot_timetable(li: int = 2, upd: list = None, show_load=True, save_subfolder
             dep_ts, arr_ts = row1['DEPARTURE_TS'], row2['ARRIVE_TS']
             sta1, sta2 = row1['STATION_NID'], row2['STATION_NID']
 
+            # Special case for line 7: Handle circular line where the first and last stations are connected.
             if li == 7 and min(sta1, sta2) == min(stations) and max(sta1, sta2) == max(stations) - 1:
                 if sta1 < sta2:
                     sta1 = max(stations)

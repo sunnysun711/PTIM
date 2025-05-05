@@ -10,22 +10,21 @@ from src import config
 
 def test1():
     from src.utils import read_, read_all
-    from src.itinerary import attach_walk_dis_all, cal_in_vehicle_penal_all, compute_itinerary_probabilities
+    from src.itinerary import filter_dis_file, cal_in_vehicle_penal_all, compute_itinerary_probabilities
     from src.timetable import find_overload_train_section
     from src.congest_penal import build_penal_mapper_df
 
     left = read_(config.CONFIG["results"]["left"], show_timer=False)
     assigned = read_all(config.CONFIG["results"]["assigned"], show_timer=False)
 
-    # this takes 40s
-    dis = attach_walk_dis_all(
-        wtd=None,  # WalkTimeDisModel(get_etd(), get_ttd()),
-        left=left
-    )
+    # get walk link distribution attached iti from file and filter with left.
+    dis_df_from_file = read_(config.CONFIG["results"]["dis"], show_timer=False)
+    dis_attached_iti = filter_dis_file(
+        dis_df_from_file=dis_df_from_file, left=left)
 
-    # this takes 10s
+    # find overload trains and calculate in_vehicle links penalty and attach to iti -> this takes 10s
     overload_train_section = find_overload_train_section(assigned=assigned)
-    penal = cal_in_vehicle_penal_all(
+    penalized_iti = cal_in_vehicle_penal_all(
         penal_mapper_df=build_penal_mapper_df(
             overload_train_section=overload_train_section,
             penal_func_type="x",
@@ -34,16 +33,45 @@ def test1():
         left=left
     )
 
-    # this takes 10s
-    prob = compute_itinerary_probabilities(dis_attached_iti=dis, penal=penal)
+    # calculate probability based on walk distribution and in_vehicle penalized iti dataframes -> this takes 10s
+    prob = compute_itinerary_probabilities(
+        dis_attached_iti=dis_attached_iti, penalized_iti=penalized_iti)
 
     print(prob)
-    
-    prob_max = prob["prob"].max()
-    print(f"Max prob: {prob_max}")
-    
-    to_assign_rid_iti_id_pair = prob["prob"].nlargest(10000).index.to_list()
-    print("To assign (rid, iti_id): ", to_assign_rid_iti_id_pair)
+
+    # get most-probable itinerary for each rid -> use numpy lexsort to enhance performance
+    data = prob.reset_index()[["rid", "iti_id", "prob"]].to_numpy()
+    sorted_idx = np.lexsort((-data[:, 2], data[:, 0]))  # -prob, rid
+    data_sorted = data[sorted_idx]
+
+    unique_rids, first_idx = np.unique(data_sorted[:, 0], return_index=True)
+    data_result = data_sorted[first_idx]
+    most_probable_iti_df = pd.DataFrame(
+        data_result, columns=["rid", 'iti_id', 'prob'])
+    most_probable_iti_df['rid'] = most_probable_iti_df['rid'].astype(int)
+    most_probable_iti_df['iti_id'] = most_probable_iti_df['iti_id'].astype(int)
+
+    print(most_probable_iti_df)
+
+    ### ✅ max-prob uniqueness check ###
+    is_unique_max = np.ones(len(first_idx), dtype=bool)
+
+    prob_first = data_sorted[first_idx, 2]
+    # second max prob, potentially equal to max_prob
+    prob_next = data_sorted[first_idx + 1, 2]
+
+    is_unique_max = prob_first != prob_next  # check uniqueness
+
+    non_unique_rids = unique_rids[~is_unique_max]
+    print(f"Number of rid with non-unique max prob: {len(non_unique_rids)}")
+    print(f"Example rids: {non_unique_rids[:10]}")
+
+    flag_df = pd.DataFrame({
+        'rid': unique_rids,
+        'is_unique_max': is_unique_max,
+        'prob': prob_first
+    })
+    flag_df = flag_df[~is_unique_max]
     ...
 
 

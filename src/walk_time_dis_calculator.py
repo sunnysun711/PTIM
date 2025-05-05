@@ -592,6 +592,6 @@ def _test_feas_iti_dis_calculate_one_rid(rid: int, plot_seg_trains: bool = True)
 
 if __name__ == "__main__":
     config.load_config()
-    _test_feas_iti_dis_calculate_one_rid(rid=903630)  # 1723090
+    _test_feas_iti_dis_calculate_one_rid(rid=935795)  # 1723090
 
     pass

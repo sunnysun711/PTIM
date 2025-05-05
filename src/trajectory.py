@@ -77,18 +77,18 @@ def split_feas_iti(feas_iti_cnt_limit: int = None):
     return
 
 
-def assign_feas_iti_to_trajectory(rid_iti_id_pair: list[tuple[int, int]]):
+def assign_feas_iti_to_trajectory(rid_iti_pairs: list[tuple[int, int]]):
     """
     Assign feasible itineraries to trajectories.
 
-    :param rid_iti_id_pair:
+    :param rid_iti_pairs:
         A list of tuples, each tuple is (rid, iti_id).
-    :type rid_iti_id_pair: list[tuple[int, int]]
+    :type rid_iti_pairs: list[tuple[int, int]]
     """
     fi_left = read_(config.CONFIG["results"]['left'], show_timer=False)
 
     assigned_df = fi_left.merge(
-        pd.DataFrame(rid_iti_id_pair, columns=["rid", "iti_id"]),
+        pd.DataFrame(rid_iti_pairs, columns=["rid", "iti_id"]),
         on=["rid", "iti_id"],
         how="inner"
     )

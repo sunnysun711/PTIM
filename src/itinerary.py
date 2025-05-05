@@ -56,7 +56,7 @@ Example usage:
 
 >>> # Step 3: Build penalty mapping DataFrame from overload sections
 >>> overload_train_section = find_overload_train_section()  # from src.timetable
->>> penal_mapper_df = build_penal_mapper_df(overload_train_section)
+>>> penal_mapper_df = build_penal_mapper_df(overload_train_section)  # from src.congest_penal
 
 >>> # Step 4: Map penalties onto itineraries
 >>> penal_df = cal_in_vehicle_penal_all(penal_mapper_df)

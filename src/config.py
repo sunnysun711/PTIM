@@ -28,6 +28,7 @@ def determine_results_subfolder(fn: str) -> str:
     elif fn in [
         CONFIG["results"]["feas_iti"],
         CONFIG["results"]["AFC_no_iti"],
+        CONFIG["results"]["dis"],
     ]:
         return CONFIG["results_subfolder"]["itinerary"]
 
@@ -35,7 +36,6 @@ def determine_results_subfolder(fn: str) -> str:
         CONFIG["results"]["assigned"],
         CONFIG["results"]["left"],
         CONFIG["results"]["stashed"],
-        CONFIG["results"]["dis"]
     ]:
         return CONFIG["results_subfolder"]["trajectory"]
 
