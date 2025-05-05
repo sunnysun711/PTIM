@@ -55,6 +55,7 @@ parameters:
   distribution_type: "kde" # "kde", "gamma", or "lognorm"
   # parameters for penalty
   penalty_type: "x" # ["x", "x2", "x2_", "y2", "y2_"] or a number for normal CDF penalty
+  penalty_agg_method: "min" # "min", "mean", or "prod"
   # parameters for trajectory
   strategy: "random" # "random" or "greedy"
   step_size: 100

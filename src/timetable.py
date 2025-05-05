@@ -147,7 +147,8 @@ def find_overload_train_section(assigned: pd.DataFrame = None) -> dict[int, np.n
     """
     Find the overload train, section pairs.
 
-    :param assigned: assigned trajectory dataframe. Defaults to None.
+    :param assigned: assigned trajectory dataframe. 
+        Defaults to None, meaning use `read_all()` to concat all assigned_*.pkl files.
 
         Expected columns: [`rid`, `iti_id`, `path_id`, `seg_id`, `train_id`, `board_ts`, `alight_ts`]
     :type assigned: pd.DataFrame, optional, default=None
@@ -371,6 +372,6 @@ def plot_timetable_all(save_subfolder: str, separate_upd: bool = False, assigned
 if __name__ == '__main__':
     config.load_config()
 
-    # plot_timetable_all("TT0")
+    plot_timetable_all("TT_20231109")
     overload_info = find_overload_train_section()
     print(overload_info)

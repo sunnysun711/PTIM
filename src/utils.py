@@ -264,9 +264,9 @@ def read_(fn: str = "AFC", show_timer: bool = False, drop_cols: bool = True,
     return df
 
 
-def save_(fn: str, data: pd.DataFrame, auto_index_on: bool = False) -> None:
+def save_(fn: str, data: pd.DataFrame, auto_index_on: bool = False, verbose: bool = True) -> None:
     """
-    Saves a DataFrame to a .pkl file.
+    Saves a DataFrame to a .pkl/.csv/.parquet file.
 
     :param fn: The name of the file. The function will save the data to the appropriate directory based on the configuration.
     :type fn: str
@@ -275,11 +275,11 @@ def save_(fn: str, data: pd.DataFrame, auto_index_on: bool = False) -> None:
     :type data: pd.DataFrame
 
     :param auto_index_on: If set to True, the function will automatically append an index to the file name
-        to avoid overwriting existing files. 
-        
-        The index will be appended as `_1`, `_2`, etc., up to `_10000`. If no available
-        index is found, the function will raise a RuntimeError.
+        to avoid overwriting existing files.
     :type auto_index_on: bool, optional, default=False
+
+    :param verbose: If True, print a sample and data.info() before saving.
+    :type verbose: bool, optional, default=True
 
     :returns: None
 
@@ -288,7 +288,7 @@ def save_(fn: str, data: pd.DataFrame, auto_index_on: bool = False) -> None:
     Example:
     --------
     >>> save_("my_data", my_dataframe)
-    >>> save_(config.CONFIG["results"]["egress_times"], egress_times_df, auto_index_on=True)
+    >>> save_(config.CONFIG["results"]["egress_times"], egress_times_df, auto_index_on=True, verbose=False)
     """
     if len(fn.split(".")) == 1:  # No extension
         fn = f"{fn}.pkl"
@@ -305,9 +305,9 @@ def save_(fn: str, data: pd.DataFrame, auto_index_on: bool = False) -> None:
     if auto_index_on:
         fp = fp.split(".")[0] + f"_{get_latest_file_index(fp, get_next=True)}." + fp.split(".")[-1]
 
-    # display saving dataframe
-    print(data.sample(n=min(10, len(data))))
-    data.info()
+    if verbose:
+        print(data.sample(n=min(10, len(data))))
+        data.info()
 
     saving_method(fp)
     print(f"\033[1;91m[INFO] File saved to: {fp}\033[0m")  # bold red
