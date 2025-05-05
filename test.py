@@ -6,10 +6,44 @@ import time
 import pandas as pd
 
 from src import config
-from src.timetable import TI2C
 
 
 def test1():
+    from src.utils import read_, read_all
+    from src.itinerary import attach_walk_dis_all, cal_in_vehicle_penal_all, compute_itinerary_probabilities
+    from src.timetable import find_overload_train_section
+    from src.congest_penal import build_penal_mapper_df
+
+    left = read_(config.CONFIG["results"]["left"], show_timer=False)
+    assigned = read_all(config.CONFIG["results"]["assigned"], show_timer=False)
+
+    # this takes 40s
+    dis = attach_walk_dis_all(
+        wtd=None,  # WalkTimeDisModel(get_etd(), get_ttd()),
+        left=left
+    )
+
+    # this takes 10s
+    overload_train_section = find_overload_train_section(assigned=assigned)
+    penal = cal_in_vehicle_penal_all(
+        penal_mapper_df=build_penal_mapper_df(
+            overload_train_section=overload_train_section,
+            penal_func_type="x",
+            penal_agg_method="min"
+        ),
+        left=left
+    )
+
+    # this takes 10s
+    prob = compute_itinerary_probabilities(dis_attached_iti=dis, penal=penal)
+
+    print(prob)
+    
+    prob_max = prob["prob"].max()
+    print(f"Max prob: {prob_max}")
+    
+    to_assign_rid_iti_id_pair = prob["prob"].nlargest(10000).index.to_list()
+    print("To assign (rid, iti_id): ", to_assign_rid_iti_id_pair)
     ...
 
 
@@ -158,7 +192,7 @@ if __name__ == "__main__":
     print("=" * 100)
     print("Test 1".center(100, " "))
     print("=" * 100)
-    # test1()
+    test1()
 
     print("=" * 100)
     print("Test 2".center(100, " "))

@@ -209,7 +209,7 @@ def _build_penalty_dict_array(
     return penalty_dict
 
 
-def build_penalty_df(
+def build_penal_mapper_df(
     overload_train_section: dict[int, np.ndarray],
     penal_func_type: str | float | int = "x",
     penal_agg_method: str = "min"
@@ -254,7 +254,7 @@ def build_penalty_df(
     )
 
     agg_method = agg_method_mapping[penal_agg_method]
-    penalty_df = pd.DataFrame(
+    penal_mapper_df = pd.DataFrame(
         [
             (*key, float(agg_method(arr[:, -1])))
             for key, arr in penalty_dict_array.items()
@@ -262,7 +262,7 @@ def build_penalty_df(
         columns=["train_id", "board_ts", "alight_ts", "penalty"]
     )
 
-    return penalty_df
+    return penal_mapper_df
 
 
 if __name__ == "__main__":
@@ -278,7 +278,7 @@ if __name__ == "__main__":
     config.CONFIG["parameters"]["TRAIN_B_AREA"] = 50
     print(np.unique([i for i in get_ti2c().values()]))
 
-    res = build_penalty_df(
+    res = build_penal_mapper_df(
         overload_train_section={10200956: np.array(
             [[10241, 29678, 10240, 29761, 605],
              [10240, 29796, 10239, 29862, 622],

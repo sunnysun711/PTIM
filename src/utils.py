@@ -288,7 +288,7 @@ def save_(fn: str, data: pd.DataFrame, auto_index_on: bool = False) -> None:
     Example:
     --------
     >>> save_("my_data", my_dataframe)
-
+    >>> save_(config.CONFIG["results"]["egress_times"], egress_times_df, auto_index_on=True)
     """
     if len(fn.split(".")) == 1:  # No extension
         fn = f"{fn}.pkl"

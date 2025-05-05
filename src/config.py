@@ -35,6 +35,7 @@ def determine_results_subfolder(fn: str) -> str:
         CONFIG["results"]["assigned"],
         CONFIG["results"]["left"],
         CONFIG["results"]["stashed"],
+        CONFIG["results"]["dis"]
     ]:
         return CONFIG["results_subfolder"]["trajectory"]
 
