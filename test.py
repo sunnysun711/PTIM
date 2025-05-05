@@ -1,165 +1,241 @@
 # to test and implement GPT-generated code
+import cProfile
 import numpy as np
 import time
 
 import pandas as pd
 
 from src import config
-from src.globals import get_afc, get_k_pv_dict, get_tt, get_platform
-
-
-# from src.walk_time_dis import *
 
 
 def test1():
-    # try egress
-    path_to_eg_platform = map_path_id_to_platform(egress=True, entry=False)
-    # print(path_to_eg_platform)
+    from src.utils import read_, read_all
+    from src.itinerary import filter_dis_file, cal_in_vehicle_penal_all, compute_itinerary_probabilities
+    from src.timetable import find_overload_train_section
+    from src.congest_penal import build_penal_mapper_df
 
-    platform_to_pl_id = map_platform_id_to_pl_id()
-    # print(platform_to_pl_id)
+    left = read_(config.CONFIG["results"]["left"], show_timer=False)
+    assigned = read_all(config.CONFIG["results"]["assigned"], show_timer=False)
 
-    pl_id_to_x2pdf = map_pl_id_to_x2pdf_cdf(pdf=True, cdf=False)
-    # print(pl_id_to_x2pdf)
+    # get walk link distribution attached iti from file and filter with left.
+    dis_df_from_file = read_(config.CONFIG["results"]["dis"], show_timer=False)
+    dis_attached_iti = filter_dis_file(
+        dis_df_from_file=dis_df_from_file, left=left)
 
-    path_id = np.random.choice(get_k_pv()[:, 0], size=1)[0]
-    print(path_id)
+    # find overload trains and calculate in_vehicle links penalty and attach to iti -> this takes 10s
+    overload_train_section = find_overload_train_section(assigned=assigned)
+    penalized_iti = cal_in_vehicle_penal_all(
+        penal_mapper_df=build_penal_mapper_df(
+            overload_train_section=overload_train_section,
+            penal_func_type="x",
+            penal_agg_method="min"
+        ),
+        left=left
+    )
 
-    x2pdf_for_this_path_id = pl_id_to_x2pdf[
-        platform_to_pl_id[path_to_eg_platform[path_id]]
-    ]
-    # print(x2pdf_for_this_path_id)
+    # calculate probability based on walk distribution and in_vehicle penalized iti dataframes -> this takes 10s
+    prob = compute_itinerary_probabilities(
+        dis_attached_iti=dis_attached_iti, penalized_iti=penalized_iti)
 
-    egress_times = np.random.randint(low=0, high=500, size=10000)
+    print(prob)
 
-    pdf_vals = cal_pdf(x2pdf_for_this_path_id, egress_times)
-    print(pdf_vals)
+    # get most-probable itinerary for each rid -> use numpy lexsort to enhance performance
+    data = prob.reset_index()[["rid", "iti_id", "prob"]].to_numpy()
+    sorted_idx = np.lexsort((-data[:, 2], data[:, 0]))  # -prob, rid
+    data_sorted = data[sorted_idx]
+
+    unique_rids, first_idx = np.unique(data_sorted[:, 0], return_index=True)
+    data_result = data_sorted[first_idx]
+    most_probable_iti_df = pd.DataFrame(
+        data_result, columns=["rid", 'iti_id', 'prob'])
+    most_probable_iti_df['rid'] = most_probable_iti_df['rid'].astype(int)
+    most_probable_iti_df['iti_id'] = most_probable_iti_df['iti_id'].astype(int)
+
+    print(most_probable_iti_df)
+
+    ### ✅ max-prob uniqueness check ###
+    is_unique_max = np.ones(len(first_idx), dtype=bool)
+
+    prob_first = data_sorted[first_idx, 2]
+    # second max prob, potentially equal to max_prob
+    prob_next = data_sorted[first_idx + 1, 2]
+
+    is_unique_max = prob_first != prob_next  # check uniqueness
+
+    non_unique_rids = unique_rids[~is_unique_max]
+    print(f"Number of rid with non-unique max prob: {len(non_unique_rids)}")
+    print(f"Example rids: {non_unique_rids[:10]}")
+
+    flag_df = pd.DataFrame({
+        'rid': unique_rids,
+        'is_unique_max': is_unique_max,
+        'prob': prob_first
+    })
+    flag_df = flag_df[~is_unique_max]
     ...
 
 
 def test2():
-    # try entry
-    path_to_en_platform = map_path_id_to_platform(egress=False, entry=True)
-    platform_to_pl_id = map_platform_id_to_pl_id()
-    print(platform_to_pl_id.keys())
-    pl_id_to_x2cdf = map_pl_id_to_x2pdf_cdf(pdf=False, cdf=True)
-    # path_id = np.random.choice(get_k_pv()[:, 0], size=1)[0]
-    path_id = 1101110005  # todo: Bug found for all terminal stations. downstream platform id is not included in physical_links.csv
-    print(path_id)
-
-    x2cdf_for_this_path_id = pl_id_to_x2cdf[
-        platform_to_pl_id[path_to_en_platform[path_id]]
-    ]
-
-    t_start = np.random.randint(low=0, high=250, size=10000)
-    t_end = np.random.randint(low=t_start, high=500, size=10000)
-    cdf_vals = cal_cdf(x2cdf_for_this_path_id, t_start, t_end)
-    print(cdf_vals)
-
     ...
 
 
 def test3():
-    # try transfer
-    ps2t = map_path_seg_to_platforms()
-
-    t_to_x2cdf = map_transfer_link_to_x2cdf()
-
-    assigned = read_("assigned", latest_=True, show_timer=False)
-    _df = assigned[assigned["seg_id"] != 1].sample(n=1)
-    path_id, seg_id = _df["path_id"].values[0], _df["seg_id"].values[0]
-    print(path_id, seg_id - 1)
-
-    x2cdf_for_this_path_seg = t_to_x2cdf[ps2t[(path_id, seg_id - 1)]]
-    t_start = np.random.randint(low=0, high=250, size=10000)
-    t_end = np.random.randint(low=t_start, high=500, size=10000)
-    cdf_vals = cal_cdf(x2cdf_for_this_path_seg, t_start, t_end)
-    print(cdf_vals)
-
     ...
 
 
 def test4():
-    # try the calculator
-    from src.walk_time_dis_calculator import WalkTimeDisModel
-
-    # building test data
-    assigned = read_("assigned", latest_=True, show_timer=False)
-    _df = assigned[assigned["seg_id"] != 1].sample(n=1)
-    path_id, seg_id = _df["path_id"].values[0], _df["seg_id"].values[0] - 1
-
-    egress_times = np.random.randint(low=0, high=500, size=100)
-    entry_times = np.random.randint(low=0, high=500, size=100)
-    transfer_t_start = np.random.randint(low=0, high=250, size=100)
-    transfer_t_end = np.random.randint(low=transfer_t_start, high=500, size=100)
-
-    print(f"Path ID: {path_id}, Segment ID: {seg_id}")
-    print(f"Egress Times: {egress_times}")
-    print(f"Entry Times: {entry_times}")
-    print(f"Transfer Start Times: {transfer_t_start}")
-    print(f"Transfer End Times: {transfer_t_end}")
-
-    # Initialize the calculator
-    calculator = WalkTimeDisModel()
-
-    try:  # egress time PDF calculation
-        pdf_values = calculator.egress_time_dis_calculator(path_id, egress_times)
-        print(f"Egress PDF for path_id={path_id}, times={egress_times}: {pdf_values}")
-    except Exception as e:
-        print(f"Egress time calculation failed: {e}")
-
-    try:  # entry time CDF calculation
-        cdf_values = calculator.entry_time_dis_calculator(
-            path_id, np.zeros_like(entry_times), entry_times
-        )
-        print(f"Entry CDF for path_id={path_id}, times={entry_times}: {cdf_values}")
-    except Exception as e:
-        print(f"Entry time calculation failed: {e}")
-
-    try:  # transfer time CDF calculation
-        transfer_cdf = calculator.transfer_time_dis_calculator(
-            path_id, seg_id, transfer_t_start, transfer_t_end
-        )
-        print(
-            f"Transfer CDF for path_id={path_id}, seg_id={seg_id}, t_start={transfer_t_start}, t_end={transfer_t_end}: {transfer_cdf}"
-        )
-    except Exception as e:
-        print(f"Transfer time calculation failed: {e}")
-
     ...
 
 
 def test5():
-    import os
-    from src.globals import get_etd, get_ttd
-
-    print(get_etd())
-    print(get_ttd())
     ...
+
+
+def plot_timetable_plotly(TT: pd.DataFrame, line_nid: int = 1, updown: list = [1, -1],
+                          include_train_load: bool = False,
+                          xylabel_fontsize: int = 10):
+    """
+    Plot train timetable with train load shown as line colors and a color legend (using Plotly).
+
+    :param TT: DataFrame containing the train timetable data.
+    :param line_nid: The line number for which to filter the data.
+    :param updown: The direction of the train, 1 for up, -1 for down.
+    :param include_train_load: Whether to include train load data in the plot.
+    :param xylabel_fontsize: Font size for x and y labels.
+    :return: None
+    """
+    import plotly.graph_objects as go
+    from matplotlib import pyplot as plt
+    from matplotlib import cm
+    # Filter timetable for specific line and directions
+    filtered_tt = TT[(TT['LINE_NID'] == line_nid) &
+                     (TT['UPDOWN'].isin(updown))]
+
+    # Ensure that we have data
+    if filtered_tt.empty:
+        print("No data found for the given line and direction.")
+        return
+
+    # Get the time range from the filtered timetable
+    start_time = filtered_tt['ARRIVE_TS'].min()
+    end_time = filtered_tt['DEPARTURE_TS'].max()
+    print(
+        f"Plotting for time range: {start_time} to {end_time} (seconds since midnight)")
+
+    # Prepare data for plotting
+    segments = []
+    load_values = []
+
+    # Store all unique station IDs (flattened)
+    station_ids = []
+
+    for train_id in filtered_tt.index.unique():
+        train_data = filtered_tt[filtered_tt.index == train_id]
+
+        for i in range(len(train_data) - 1):
+            # Connect the current station's departure with the next station's arrival
+            row1 = train_data.iloc[i]
+            row2 = train_data.iloc[i + 1]
+
+            # Convert timestamps to numeric values (seconds since midnight)
+            x = [row1['DEPARTURE_TS'], row2['ARRIVE_TS']]
+            y = [row1['STATION_NID'], row2['STATION_NID']]
+
+            # Add station IDs to the list (flattened)
+            station_ids.extend([row1['STATION_NID'], row2['STATION_NID']])
+
+            # Color based on train load (if required)
+            if include_train_load:
+                # Random load for now (replace with actual data)
+                load = np.random.randint(1, 100)
+                load_values.append(load)
+            else:
+                # Default load for now (0 if not showing load)
+                load_values.append(0)
+
+            # Store the line segments for plotting
+            segments.append([x, y])
+
+    # Remove duplicates and get unique stations
+    unique_station_ids = sorted(set(station_ids))
+
+    # Create figure
+    fig = go.Figure()
+
+    # Define color scale using matplotlib colormap
+    cmap = cm.viridis
+    norm = plt.Normalize(vmin=min(load_values), vmax=max(
+        load_values))  # Normalize train load values
+
+    # Add lines for each segment
+    for i, segment in enumerate(segments):
+        x, y = segment
+        load = load_values[i]  # Use load for color mapping
+        rgba_color = cmap(norm(load))  # Get RGBA color from colormap
+        # Convert to RGB string
+        rgb_color = f"rgb({int(rgba_color[0] * 255)}, {int(rgba_color[1] * 255)}, {int(rgba_color[2] * 255)})"
+        fig.add_trace(go.Scatter(
+            x=x,
+            y=y,
+            mode='lines',
+            line=dict(color=rgb_color, width=2),
+            showlegend=False
+        ))
+
+    # Set axis labels and title
+    fig.update_layout(
+        title='Train Timetable',
+        xaxis_title='Time (HH:MM)',
+        yaxis_title='Station NID',
+        xaxis=dict(
+            tickmode='array',
+            tickvals=np.arange(start_time, end_time, 3600),  # Every hour
+            ticktext=[f"{int(t//3600):02}:{int((t%3600)//60):02}" for t in np.arange(
+                start_time, end_time, 3600)]  # Format as HH:MM
+        ),
+        yaxis=dict(
+            tickmode='array',
+            tickvals=unique_station_ids,  # Set station labels
+            # Use unique station IDs for tick labels
+            ticktext=[
+                f"Station {int(station)}" for station in unique_station_ids]
+        ),
+    )
+
+    # Show color bar if train load is included
+    if include_train_load:
+        fig.update_layout(coloraxis_colorbar=dict(
+            title="Train Load",
+            tickvals=[0, 20, 40, 60, 80, 100],
+            ticktext=["Low", "20", "40", "60", "80", "High"]
+        ))
+
+    # Show plot
+    fig.show()
 
 
 if __name__ == "__main__":
     config.load_config()
 
-    # print("=" * 100)
-    # print("Test 1".center(100, " "))
-    # print("=" * 100)
-    # test1()
+    print("=" * 100)
+    print("Test 1".center(100, " "))
+    print("=" * 100)
+    test1()
 
-    # print("=" * 100)
-    # print("Test 2".center(100, " "))
-    # print("=" * 100)
-    # test2()
+    print("=" * 100)
+    print("Test 2".center(100, " "))
+    print("=" * 100)
+    test2()
 
-    # print("=" * 100)
-    # print("Test 3".center(100, " "))
-    # print("=" * 100)
-    # test3()
+    print("=" * 100)
+    print("Test 3".center(100, " "))
+    print("=" * 100)
+    test3()
 
-    # print("=" * 100)
-    # print("Test 4".center(100, " "))
-    # print("=" * 100)
-    # test4()
+    print("=" * 100)
+    print("Test 4".center(100, " "))
+    print("=" * 100)
+    test4()
 
     print("=" * 100)
     print("Test 5".center(100, " "))

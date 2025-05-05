@@ -12,9 +12,6 @@ def main(config_file):
     if not config.CONFIG["use_existing"]["network"]:
         from scripts import prep_network
         prep_network.main()
-    elif not config.CONFIG["use_existing"]["path"]:
-        from scripts import prep_network
-        prep_network.main()
 
     if not config.CONFIG["use_existing"]["itinerary"]:
         from scripts import find_feas_iti
@@ -24,13 +21,18 @@ def main(config_file):
         from scripts import split_feas_iti
         split_feas_iti.main()
 
-    from scripts import analyze_egress
-    analyze_egress.main()
+    if not config.CONFIG["use_existing"]["walk_times"]:
+        from scripts import analyze_walk_time
+        analyze_walk_time.main()
+
+    from scripts import calculate_distribution
+    calculate_distribution.main()
 
 
 if __name__ == "__main__":
     # Set up argument parsing
-    parser = argparse.ArgumentParser(description="Run the script with a given config file.")
+    parser = argparse.ArgumentParser(
+        description="Run the script with a given config file.")
     parser.add_argument(
         "--config",
         type=str,

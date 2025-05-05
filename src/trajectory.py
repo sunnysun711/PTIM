@@ -34,18 +34,22 @@ from src.utils import read_, save_
 def split_feas_iti(feas_iti_cnt_limit: int = None):
     """
     This is a one-step method that splits the feas_iti.pkl into three files:
+
         1. feas_iti_assigned_1.pkl:
             only one feasible itinerary for each rid.
         2. feas_iti_stashed.pkl:
             more than `feas_iti_cnt_limit` feasible itineraries for each rid.
         3. feas_iti_left.pkl:
             less than `feas_iti_cnt_limit` but more than 1 feasible itineraries for each rid.
+
     :param feas_iti_cnt_limit:
         The maximum number of feasible itineraries for each rid.
+        
         If the number of feasible itineraries for a rid is greater than this limit,
         the corresponding row will be saved to feas_iti_stashed.pkl.
+        
         Default is given by config yaml file.
-    :return:
+    :type feas_iti_cnt_limit: int, optional
     """
     feas_iti_cnt_limit = config.CONFIG["parameters"][
         "feas_iti_cnt_limit"] if feas_iti_cnt_limit is None else feas_iti_cnt_limit
@@ -73,14 +77,18 @@ def split_feas_iti(feas_iti_cnt_limit: int = None):
     return
 
 
-def assign_feas_iti_to_trajectory(rid_iti_id_pair: list[tuple[int, int]]):
+def assign_feas_iti_to_trajectory(rid_iti_pairs: list[tuple[int, int]]):
     """
     Assign feasible itineraries to trajectories.
+
+    :param rid_iti_pairs:
+        A list of tuples, each tuple is (rid, iti_id).
+    :type rid_iti_pairs: list[tuple[int, int]]
     """
     fi_left = read_(config.CONFIG["results"]['left'], show_timer=False)
 
     assigned_df = fi_left.merge(
-        pd.DataFrame(rid_iti_id_pair, columns=["rid", "iti_id"]),
+        pd.DataFrame(rid_iti_pairs, columns=["rid", "iti_id"]),
         on=["rid", "iti_id"],
         how="inner"
     )

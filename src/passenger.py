@@ -34,11 +34,26 @@ from src.utils import ts2tstr, save_, tqdm_joblib
 
 def find_trains(nid1: int, nid2: int, ts1: int, ts2: int, line: int, upd: int) -> list[tuple[int, int, int]]:
     """
-    Find trains, board_ts, alight_ts for nid pairs within ts range.
-    Board_ts is obtained from departure_ts, alight_ts from arrive_ts.
-
-    :return: [(train_id, board_ts, alight_ts), ...]
+    Find available trains between two stations within a time window.
+    
+    :param nid1: The from station_nid
+    :type nid1: int
+    :param nid2: The to station_nid
+    :type nid2: int
+    :param ts1: The start timestamp
+    :type ts1: int
+    :param ts2: The end timestamp
+    :type ts2: int
+    :param line: The line_nid
+    :type line: int
+    :param upd: The updown direction (1 for down, -1 for up)
+    :type upd: int
+    :raises Assertion: If ts1 is not smaller than ts2
+    
+    :return: Available trains with the format [(train_id, board_ts, alight_ts), ...]
+    :rtype: list[tuple[int, int, int]]
     """
+    
     assert ts1 < ts2, f"ts1 should be smaller than ts2: {ts1}, {ts2}"
 
     # filter line
@@ -81,10 +96,14 @@ def find_seg_trains(pv: np.ndarray, ts1: int, ts2: int) -> list[list[tuple[int, 
     This holds: len(seg_trains) = number of seg in this path_id.
 
     :param pv: Path via array, [path_id, nid1, nid2, line, upd]
+    :type pv: np.ndarray
     :param ts1: Timestamp 1.
+    :type ts1: int
     :param ts2: Timestamp 2.
+    :type ts2: int
     :return: List of trains for each segment, each element is a list of trains,
         [[(train_id, b_ts, a_ts), (train_id, b_ts, a_ts),...], [(train_id, b_ts, a_ts)], ...].
+    :rtype: list[list[tuple[int, int, int]]]
     """
     seg_trains: list[list[tuple[int, int, int]]] = []
     ts1_this_seg = ts1
@@ -108,11 +127,17 @@ def find_seg_trains(pv: np.ndarray, ts1: int, ts2: int) -> list[list[tuple[int, 
 def find_feas_iti(k_pv: np.ndarray, ts1: int, ts2: int) -> list[list[int | tuple[int, int, int]]]:
     """
     Find feasible itineraries with k shortest path via array (`k_pv`) and ts range (`ts1`,`ts2`) provided.
+    
     :param k_pv: path via array, [path_id, nid1, nid2, line, upd]
+    :type k_pv: np.ndarray
     :param ts1: timestamp 1.
+    :type ts1: int
     :param ts2: timestamp 2.
+    :type ts2: int
     :return: list of itineraries,
+        
         [[path_id, (train_id, b_ts, a_ts), (train_id, b_ts, a_ts), ...], [path_id, (train_id, b_ts, a_ts)], ...]
+    :rtype: list[list[int | tuple[int, int, int]]]
     """
     feas_iti_list: list[list[int | tuple[int, int, int]]] = []
     for path_id in set(k_pv[:, 0]):
@@ -141,25 +166,24 @@ def find_feas_iti(k_pv: np.ndarray, ts1: int, ts2: int) -> list[list[int | tuple
 
 def plot_seg_trains(k_pv: np.ndarray, ts1: int, ts2: int):
     """
-        Visualizes available trains for each segment of given paths.
-
-    Args:
-        k_pv: Array of path segments with shape [n,5]
-        ts1: Minimum timestamp for visualization
-        ts2: Maximum timestamp for visualization
+    Visualizes available trains for each segment of given paths.
 
     Displays:
         Interactive plot showing train connections between stations
+
         - Each subplot represents a different path
         - Lines connect boarding/alighting times
         - Colors represent different train lines
-
+    
     Note:
         Requires matplotlib and TkAgg backend
-    :param k_pv: k path via numpy array
-    :param ts1: timestamp 1
-    :param ts2: timestamp 2
-    :return:
+
+    :param k_pv: Path via array, [path_id, nid1, nid2, line, upd]
+    :type k_pv: np.ndarray
+    :param ts1: Timestamp 1.
+    :type ts1: int
+    :param ts2: Timestamp 2.
+    :type ts2: int
     """
     import matplotlib
     matplotlib.use("TkAgg")
@@ -283,6 +307,7 @@ def find_feas_iti_all(save_feas_iti: bool = True, save_afc_no_iti: bool = True) 
     """
     Main function to find feasible itineraries for all passengers and save results.
     This function will generate two dataframes:
+        
         1. AFC_no_iti.pkl: records of passengers without feasible itineraries.
             (Could be empty, if empty, not saved.)
         2. feas_iti.pkl: feasible itineraries for all passengers. (with the returned df structure)
@@ -290,7 +315,9 @@ def find_feas_iti_all(save_feas_iti: bool = True, save_afc_no_iti: bool = True) 
     NOTE: The full execution typically takes around **10 minutes**, depending on system performance.
 
     :return: pd.DataFrame containing feasible itineraries.
+        
         columns: ['rid', 'iti_id', 'path_id','seg_id', 'train_id', 'board_ts', 'alight_ts']
+    :rtype: pd.DataFrame
     """
     afc = get_afc()
     k_pv_dic = get_k_pv_dict()
@@ -349,6 +376,18 @@ def find_feas_iti_all(save_feas_iti: bool = True, save_afc_no_iti: bool = True) 
 
 
 def process_afc_chunk(chunk: np.ndarray, k_pv_dict: dict) -> list[list]:
+    """
+    process a chunk of afc data.
+
+    :param chunk: afc data.
+    :type chunk: np.ndarray
+    :param k_pv_dict: k path dictionary mapping node pairs to k path value matrices.
+    :type k_pv_dict: dict
+    :return: List of feasible itinerary segments. 
+        
+        Each list contains: [rid, iti_id, path_id, seg_id, train_id, board_ts, alight_ts]
+    :rtype: list[list]
+    """
     results = []
     for rid, uid1, ts1, uid2, ts2 in chunk:
         k_pv = k_pv_dict[(uid1, uid2)]
@@ -437,7 +476,16 @@ def find_feas_iti_all_parallel(save_feas_iti: bool = True, save_afc_no_iti: bool
 
 
 def _plot_check_feas_iti(rid: int = None, print_on:bool=True):
-    """Test function for feasible itineraries found."""
+    """
+    Test function for plotting feasible segment trains and feasible itineraries for a given rid.
+    Optionally print the rid, uid1, uid2, ts1, ts2 and k_pv.
+
+    :param rid: The specified rid, defaults to None, in which case a random rid is selected.
+    :type rid: int, optional, default=None
+    :param print_on: Whether to print out AFC and K_PV info, defaults to True
+    :type print_on: bool, optional, default=True
+    """
+    # Test function for feasible itineraries found.
     from src.passenger import plot_seg_trains, find_feas_iti
     from src.globals import get_afc, get_k_pv_dict
 

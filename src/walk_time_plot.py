@@ -49,20 +49,27 @@ def _plot_walk_time_dis(
 ) -> None | plt.Figure:
     """
     Visualize walk time distribution through a composite plot containing:
-    - Scatter plot of walk times vs alighting times
-    - Histogram of walk time distribution
-    - Boxplot of walk times by time bins
 
-    Parameters:
-        `walk_time` (np.ndarray): Array of walk times in seconds
-        `alight_ts` (np.ndarray): Array of alighting timestamps in seconds since midnight
-        `title` (str): Additional title text for the plot
-        `show_` (bool): If True, displays the plot; if False, return the figure object
-        `fit_curves`: List of curve names to fit and plot, e.g., ["kde", "gamma", "lognorm"].
-            If None, all three fitting will be done.
+    - (Top Left) Scatter plot of walk times vs alighting times
+    - (Top right) Histogram of walk time distribution
+    - (Lower left) Boxplot of walk times by time bins
 
-    Returns:
-        None or plt.Figure: If show_ is True, returns None; otherwise, returns the figure object
+    :param walk_time: Array of walk times in seconds
+    :type walk_time: np.ndarray
+    :param alight_ts: Array of alighting timestamps in seconds since midnight
+    :type alight_ts: np.ndarray
+    :param title: Additional title text for the plot
+    :type title: str, optional, default=""
+    :param show_: If True, displays the plot; if False, return the figure object
+    :type show_: bool, optional, default=True
+    :param fit_curves: List of curve names to fit and plot, 
+        e.g., ["kde", "gamma", "lognorm"].
+    :type fit_curves: list[str], optional, default=None, meaning 
+        all three fitting will be done.
+
+    :return: None or plt.Figure: If show_ is True, returns None; 
+        otherwise, returns the figure object
+    :rtype: None | plt.Figure
     """
     if show_:
         matplotlib.use("TkAgg")  # Use TkAgg backend for interactive plotting
@@ -73,7 +80,7 @@ def _plot_walk_time_dis(
     # Creates a 2x2 grid with:
     # - Top-left: scatter plot (80% width)
     # - Top-right: histogram (20% width)
-    # - Bottom-left: boxplot (full width)
+    # - Bottom-left: boxplot (80% width)
     fig = plt.figure(figsize=(10, 6))
     grid = plt.GridSpec(2, 2, height_ratios=[4, 1], width_ratios=[1, 0.25])
     fit_curves = ["kde", "gamma",
@@ -86,7 +93,9 @@ def _plot_walk_time_dis(
     bin_width = (walk_time.max() - walk_time.min()) / n_bins
     scale = bin_width * walk_time.size
     sns.histplot(
-        y=walk_time, kde=False, ax=ax_right, color="blue", alpha=0.3, bins=n_bins, stat='count', element="bars")
+        y=walk_time, kde=False, ax=ax_right, 
+        color="blue", alpha=0.3, bins=n_bins, stat='count', element="bars"
+    )
 
     x_values = np.linspace(0, 500, 501)
     if "kde" in fit_curves:
@@ -155,31 +164,27 @@ def plot_egress_all(
         save_on: bool = True,
 ):
     """
-    Generates and saves egress time distribution plots for all physical platform IDs, including scatter plots,
-    histograms, and boxplots. The plots visualize the relationship between egress times and alighting
-    timestamps, with outliers rejected based on z-score method.
+    Generates and saves egress time distribution plots (scatter, histogram, 
+    boxplot) for each physical platform ID.
 
-    This function processes the egress time data for different physical platform IDs, applies outlier rejection
-    to the egress time data, and generates a plot for each platform. The plots are saved as PDF and PNG
-    files to the specified directory.
-    
-    Parameters:
-    ------
+    Outliers in egress times are removed using the z-score method. 
+
+    Plots are saved as PDF and PNG in the specified directory.
+
+    :param eg_t: DataFrame containing egress time data with columns:
+
+        - 'physical_platform_id': Physical platform ID.
+        - 'egress_time': Egress time in seconds.
+        - 'alight_ts': Alighting timestamp in seconds since midnight.
+    :type eg_t: pd.DataFrame
+
     :param save_subfolder: The subfolder where plots will be saved.
-        If not specified, plots are saved in the default figure folder.
-
-    :param eg_t: DataFrame containing egress time data.
-        The DataFrame should have the following columns:
-            - 'physical_platform_id': Physical platform ID.
-            - 'egress_time': Egress time in seconds.
-            - 'alight_ts': Alighting timestamp in seconds since midnight.
+    :type save_subfolder: str, optional, default="", meaning the plots will 
+        be saved in the default figure folder.
 
     :param save_on: If True, saves the plots to PDF and PNG files. 
         If False, shows the plots interactively.
-
-    Returns:
-    ------
-    None
+    :type save_on: bool, optional, default=True
     """
     platforms = get_platform()  # pp_id, node_id, uid
 
@@ -195,10 +200,17 @@ def plot_egress_all(
             node_ids = [str(int(i))
                         for i in platforms[platforms[:, 0] == pp_id][:, 1]]
             if et.shape[0] == 0:
-                # pp_id: 103803 (Line 10 Down) no egress time data. Thus will be skipped here.
-                # FIXME: this is probably not the best solution. (Now will be handled when calculating.)
-                # (when indexing 103803, 103804 will be used.)
-                print(f"\n[WARNING] No egress data for pp_id: {pp_id}.\n")
+
+                # ================================ FIXME (RESOLVED) ================================================
+                # pp_id: 103803 (Line 10 Down platform for TaiPingYuan) has no direct egress time data in eg_t.
+                # This physical platform has no associated egress links and only accepts entry links, thus excluded from eg_t.
+                # This issue was originally marked as FIXME, but is now handled upstream in WalkTimeDisModel._create_pp_id_lookup:
+                #   - Accessing 103803 automatically redirects to use data from 103804.
+                # Therefore, skipping plot generation for 103803 here is safe, as the lookup table already provides the necessary fallback.
+                # ================================ FIXME (RESOLVED) ================================================
+
+                print(
+                    f"\n\033[33m[WARNING] No egress data for pp_id: {pp_id}.\033[0m\n")
                 continue
 
             title = f"(Egress): {pp_id}_{'-'.join(node_ids)}"
@@ -209,10 +221,11 @@ def plot_egress_all(
             print(
                 f"{title} | Data size: {et.shape[0]} / {raw_size} | BD: [{lb:.4f}, {ub:.4f}]")
             fig = _plot_walk_time_dis(
-                walk_time=et['egress_time'].values, alight_ts=et['alight_ts'].values, title=title,
+                walk_time=et['egress_time'].values, 
+                alight_ts=et['alight_ts'].values, title=title,
                 show_=not save_on  # return figure if not showing; return None if showing
             )
-            if fig is not None:  # Save the plot to PDF file and a small png file for preview
+            if fig is not None:  # Save the plot to PDF file and a small PNG file for preview
                 fig.savefig(
                     fname=f"{saving_dir}/ETD_{title[10:]}.pdf", dpi=600)
                 fig.savefig(
@@ -227,33 +240,34 @@ def plot_transfer_all(
     save_on: bool = True,
 ):
     """
-    Generates and saves transfer time distribution plots for all transfer links, 
-    which means a tuple of pp_ids. The plots include scatter plots, histograms, 
-    and box plots. The plots visualize the relationship between transfer times 
-    and alighting timestamps, with outliers rejected based on z-score method.
+    Generates and saves transfer time distribution plots (scatter, histogram, 
+    boxplot) for each transfer link.
 
-    Note: The transfer from `pp_id1` to `pp_id2` is considered equivalent to 
-    the transfer from `pp_id2` to `pp_id1`. Therefore, the final representation 
-    of a transfer link will be a tuple of physical platform IDs 
-    (`pp_id1`, `pp_id2`), with the smaller ID placed first.
+    A transfer link is represented by (pp_id_min, pp_id_max) (smaller ID first); 
+    transfers in both directions are treated as equivalent.
 
-    Parameters:
-    ------
-    :param tr_t: DataFrame containing transfer time data.
-        The DataFrame should have the following columns:
-            - 'path_id': Path ID.
-            - 'seg_id': Segment ID.
-            - 'pp_id1': Physical platform ID of the first platform.
-            - 'pp_id2': Physical platform ID of the second platform.
-            - 'alight_ts': Alighting timestamp in seconds since midnight.
-            - 'transfer_time': Transfer time in seconds.
-            - 'transfer_type': Type of transfer ('egress-entry', 'platform_swap').
+    Outliers in transfer times are removed using the z-score method.
+
+    Plots are saved as PDF and PNG in the specified directory.
+
+    :param tr_t: DataFrame containing transfer time data with columns:
+
+        - `path_id`: Path ID.
+        - `seg_id`: Segment ID.
+        - `pp_id1`: Physical platform ID of the first platform.
+        - `pp_id2`: Physical platform ID of the second platform.
+        - `alight_ts`: Alighting timestamp in seconds since midnight.
+        - `transfer_time`: Transfer time in seconds.
+        - `transfer_type`: Type of transfer (`egress-entry`, `platform_swap`).
+    :type tr_t: pd.DataFrame
 
     :param save_subfolder: The subfolder where plots will be saved.
-        If not specified, plots are saved in the default figure folder.
+    :type save_subfolder: str, optional, default="", meaning the plots 
+        will be saved in the default figure folder.
 
     :param save_on: If True, saves the plots to PDF and PNG files. 
         If False, shows the plots interactively.
+    :type save_on: bool, optional, default=True
     """
     saving_dir = config.CONFIG["figure_folder"] + "/" + save_subfolder
     if save_subfolder and not os.path.exists(saving_dir):
@@ -304,7 +318,7 @@ def plot_transfer_all(
             show_=not save_on,  # return figure if not showing; return None if showing
             fit_curves=[],  # ["kde", "gamma", "lognorm"]
         )
-        if fig is not None:  # Save the plot to PDF file and a small png file for preview
+        if fig is not None:  # Save the plot to PDF file and a small PNG file for preview
             fig.savefig(fname=f"{saving_dir}/TTD_PS_{title[26:]}.pdf", dpi=600)
             fig.savefig(fname=f"{saving_dir}/TTD_PS_{title[26:]}.png", dpi=100)
             plt.close(fig)
