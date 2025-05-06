@@ -143,7 +143,7 @@ def calculate_train_load_profile(train_id: int, board_records: np.ndarray = None
     return this_tt
 
 
-def find_overload_train_section(assigned: pd.DataFrame = None) -> dict[int, np.ndarray]:
+def find_overload_train_section(assigned: pd.DataFrame = None, suppress_warning: bool = False) -> dict[int, np.ndarray]:
     """
     Find the overload train, section pairs.
 
@@ -152,6 +152,10 @@ def find_overload_train_section(assigned: pd.DataFrame = None) -> dict[int, np.n
 
         Expected columns: [`rid`, `iti_id`, `path_id`, `seg_id`, `train_id`, `board_ts`, `alight_ts`]
     :type assigned: pd.DataFrame, optional, default=None
+    
+    :param suppress_warning: Whether to suppress warning messages for trains exceeding max capacity.
+        If True, no warning will be printed. If False, a warning will be printed for each train exceeding max capacity.
+    :type suppress_warning: bool, optional, default=False
 
     :return: Dictionary mapping train_id to np.ndarray, columns are: 
 
@@ -182,9 +186,9 @@ def find_overload_train_section(assigned: pd.DataFrame = None) -> dict[int, np.n
         if np.all(load_arr[:, -1] <= cap):  # section passengers less than capacity, skip
             continue
 
-        if np.any(load_arr[:, -1] > cap_max):
+        if np.any(load_arr[:, -1] > cap_max) and not suppress_warning:
             print(
-                f"\033[33m[WARNING] Train {train_id} exceeds max capacity!\033[0m")
+                f"\033[33m[WARNING] Train {train_id} exceeds max capacity! {load_arr[:, -1].max()} > {cap_max}\033[0m")
 
         res[train_id] = load_arr[load_arr[:, -1] > cap]
 
@@ -372,6 +376,7 @@ def plot_timetable_all(save_subfolder: str, separate_upd: bool = False, assigned
 if __name__ == '__main__':
     config.load_config()
 
-    plot_timetable_all("TT_20231109")
+    plot_timetable_all("TT_until_assigned_4")
     overload_info = find_overload_train_section()
     print(overload_info)
+    
