@@ -298,7 +298,7 @@ def roll_back_assignment(quiet_mode:bool=False):
     return
 
 
-def _prepare_dis_penal_prob(left_df, assigned_df, dis_attached_iti_from_file, overload_train_section):
+def _prepare_dis_penal_prob(left_df, dis_attached_iti_from_file, overload_train_section):
     """
     Pipeline: recompute penalties of in_vehicle links and iti probabilities.
 
@@ -474,6 +474,53 @@ def _finalize_assignment(
     assign_feas_iti_to_trajectory(final_assign_pairs)
 
 
+def _identify_overload_rids(
+    rid_iti_pairs: np.ndarray, 
+    left_df:pd.DataFrame, 
+    all_overload_rids: set[int], 
+    preassign_overload_train_section: dict[int, np.ndarray]
+) -> tuple[np.ndarray, set[int]]:
+    """
+    Identify overload rids in current rid_iti_pairs, combining already-known overload rids
+    and newly identified ones from preassign overload checking.
+
+    :param rid_iti_pairs: np.ndarray, shape (N, 2), each row is [rid, iti_id].
+    :type rid_iti_pairs: np.ndarray
+    :param left_df: pd.DataFrame, current left dataframe.
+    :type left_df: pd.DataFrame
+    :param all_overload_rids: set[int], cumulative overload rids from previous steps.
+    :type all_overload_rids: set[int]
+    :param preassign_overload_train_section: dict[int, np.ndarray], overload train section from preassign check.
+    :type preassign_overload_train_section: dict[int, np.ndarray]
+
+    :return: overload_rids (np.ndarray), updated all_overload_rids (set[int])
+    :rtype: tuple[np.ndarray, set[int]]
+    """
+    # 1️⃣ already overload rids in this batch
+    already_overload_mask = np.isin(rid_iti_pairs[:, 0], list(all_overload_rids))
+    already_overload_rids = np.unique(rid_iti_pairs[already_overload_mask][:, 0])
+
+    # 2️⃣ need to check
+    need_check_rids = np.setdiff1d(rid_iti_pairs[:, 0], list(all_overload_rids))
+
+    penalized_iti_in_pre_assign = pd.merge(
+        left=left_df[left_df['rid'].isin(need_check_rids)],
+        right=build_penal_mapper_df(
+            preassign_overload_train_section,
+            penal_func_type=config.CONFIG["parameters"]["penalty_type"],
+            penal_agg_method=config.CONFIG["parameters"]["penalty_agg_method"],
+        ),
+        on=["train_id", "board_ts", "alight_ts"],
+        how="left"
+    )
+    penalized_iti_in_pre_assign.dropna(subset=["penalty"], inplace=True)
+    new_overload_rids = penalized_iti_in_pre_assign["rid"].unique()
+
+    overload_rids = np.union1d(already_overload_rids, new_overload_rids)
+    all_overload_rids.update(overload_rids)
+
+    return overload_rids, all_overload_rids
+
 
 def dynamic_assignment():
     print(f"[INFO] Start dynamic assignment...")
@@ -487,13 +534,11 @@ def dynamic_assignment():
     current_overload_train_section = find_overload_train_section(assigned=assigned)
 
     feas_iti_prob, most_probable_iti = _prepare_dis_penal_prob(
-        left, assigned, dis_attached_iti_from_file, current_overload_train_section)
+        left, dis_attached_iti_from_file, current_overload_train_section)
+    
+    all_overload_rids = set()  # to store rids with overload iti segs
 
     while not left.empty:
-        
-        if most_probable_iti.empty:
-            print("[INFO] No feasible itinerary left to assign → break loop")
-            break
         
         print(f"\n[INFO] == Start assignment step with {left['rid'].nunique()} rids left ==\n")
         rid_iti_pairs = _select_batch(most_probable_iti, bs)
@@ -505,21 +550,24 @@ def dynamic_assignment():
             print("[INFO]    - No overload → commit full batch")
             assign_feas_iti_to_trajectory(rid_iti_pairs)
         else:
-            # cols: rid, iti_id, path_id, seg_id, train_id, board_ts, alight_ts, penalty
-            penalized_iti_in_pre_assign = pd.merge(
-                left=left[left['rid'].isin(rid_iti_pairs[:, 0])],
-                right=build_penal_mapper_df(
-                    preassign_overload_train_section, 
-                    penal_func_type=config.CONFIG["parameters"]["penalty_type"],
-                    penal_agg_method=config.CONFIG["parameters"]["penalty_agg_method"],
-                ),
-                on=["train_id", "board_ts", "alight_ts"],
-                how="left"
-            )
-            # remove not-penalized rid-iti pairs
-            penalized_iti_in_pre_assign.dropna(subset=["penalty"], inplace=True)
-            overload_rids = penalized_iti_in_pre_assign["rid"].unique()
+            overload_rids, all_overload_rids = _identify_overload_rids(
+                rid_iti_pairs, left, all_overload_rids, preassign_overload_train_section)
             overload_rid_count = overload_rids.size
+            # # cols: rid, iti_id, path_id, seg_id, train_id, board_ts, alight_ts, penalty
+            # penalized_iti_in_pre_assign = pd.merge(
+            #     left=left[left['rid'].isin(rid_iti_pairs[:, 0])],
+            #     right=build_penal_mapper_df(
+            #         preassign_overload_train_section, 
+            #         penal_func_type=config.CONFIG["parameters"]["penalty_type"],
+            #         penal_agg_method=config.CONFIG["parameters"]["penalty_agg_method"],
+            #     ),
+            #     on=["train_id", "board_ts", "alight_ts"],
+            #     how="left"
+            # )
+            # # remove not-penalized rid-iti pairs
+            # penalized_iti_in_pre_assign.dropna(subset=["penalty"], inplace=True)
+            # overload_rids = penalized_iti_in_pre_assign["rid"].unique()
+            # overload_rid_count = overload_rids.size
 
             if overload_rid_count <= o_bs:
                 print(
@@ -538,14 +586,19 @@ def dynamic_assignment():
 
         print(f"[STATUS] left: {left['rid'].nunique()} | assigned: {assigned['rid'].nunique()} | most_probable_iti: {len(most_probable_iti)}")
 
+        if most_probable_iti.empty:
+            print("[INFO] No feasible itinerary left to assign → break loop")
+            break
+
         # only recompute prob if overload detected
         if len(preassign_overload_train_section) > 0:
             current_overload_train_section = find_overload_train_section(assigned=assigned)
-            feas_iti_prob, most_probable_iti = _prepare_dis_penal_prob(
-                left, assigned, dis_attached_iti_from_file, current_overload_train_section)
             if current_overload_train_section:
                 trains_to_max_load = {train_id: load_info[:, -1].max() for train_id, load_info in current_overload_train_section.items()}
                 print(f"[STATUS] Overload trains and max loads: {trains_to_max_load}.")
+                
+            feas_iti_prob, most_probable_iti = _prepare_dis_penal_prob(
+                left, dis_attached_iti_from_file, current_overload_train_section)
 
     print(f"[INFO] Dynamic assignment finished.")
     left = read_(config.CONFIG["results"]["left"], show_timer=False)

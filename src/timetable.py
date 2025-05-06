@@ -376,7 +376,7 @@ def plot_timetable_all(save_subfolder: str, separate_upd: bool = False, assigned
 if __name__ == '__main__':
     config.load_config()
 
-    plot_timetable_all("TT_until_assigned_67")
-    overload_info = find_overload_train_section()
-    print(overload_info)
+    plot_timetable_all("TT_until_assigned_541", separate_upd=True)
+    # overload_info = find_overload_train_section()
+    # print(overload_info)
     
