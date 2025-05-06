@@ -254,26 +254,29 @@ def assign_feas_iti_to_trajectory(rid_iti_pairs: np.ndarray | list[tuple[int, in
     # save feas_iti_assigned
     save_(fn=config.CONFIG["results"]["assigned"],
           data=assigned_df, auto_index_on=True, verbose=False)
-    print(f"[INFO] Saved {assigned_df['rid'].unique().size} rids to assigned_*.pkl.")
+    print(f"       Saved {assigned_df['rid'].nunique()} rids to assigned_*.pkl.")
 
     # override and save feas_iti_left
     remaining_df = fi_left[~fi_left["rid"].isin(assigned_df["rid"])]
-    print(f"[INFO] feas_iti left updated: {fi_left['rid'].unique().size} -> {remaining_df['rid'].unique().size} rids.")
     save_(fn=config.CONFIG["results"]["left"],
           data=remaining_df, auto_index_on=False, verbose=False)
+    print(f"       Remaining left: {fi_left['rid'].nunique()} -> {remaining_df['rid'].nunique()} rids.")
     return
 
 
-def roll_back_assignment():
+def roll_back_assignment(quiet_mode:bool=False):
     """
     Roll back the latest feasible itinerary assignment.
+    
+    Quiet_mode should be True if you want to hide the print statements of 
+    reading files.
     """
     from src.utils import get_file_path, get_latest_file_index
     fp = get_file_path(config.CONFIG["results"]["assigned"])
     latest_version = get_latest_file_index(fp, get_next=False)
     fp = fp.split(".")[0] + f"_{latest_version}." + fp.split(".")[-1]
 
-    assigned_df = read_(config.CONFIG["results"]["assigned"], latest_=True)
+    assigned_df = read_(config.CONFIG["results"]["assigned"], latest_=True, quiet_mode=quiet_mode)
     rid_list = assigned_df["rid"].unique().tolist()
     print("rid_list", rid_list)
 
@@ -281,12 +284,13 @@ def roll_back_assignment():
     print(f"\033[31m[INFO] Removed {fp}.\033[0m")
 
     # find assigned rid in feas_iti.pkl
-    fi_all = read_(config.CONFIG["results"]["feas_iti"], show_timer=False)
+    fi_all = read_(config.CONFIG["results"]["feas_iti"], show_timer=False, quiet_mode=quiet_mode)
     to_restore = fi_all[fi_all["rid"].isin(rid_list)]
-    print("to_restore shape", to_restore.shape)
+    if not quiet_mode:
+        print("to_restore shape", to_restore.shape)
 
     # add related info back to feas_iti_left.pkl
-    fi_left = read_(config.CONFIG["results"]["left"], show_timer=False)
+    fi_left = read_(config.CONFIG["results"]["left"], show_timer=False, quiet_mode=quiet_mode)
     fi_left = pd.concat([fi_left, to_restore])
     save_(fn=config.CONFIG["results"]["left"],
           data=fi_left, auto_index_on=False, verbose=False)
@@ -334,8 +338,8 @@ def _select_batch(most_probable_iti, batch_size):
 
     prob_stats = to_assign_probable_iti['prob'].quantile(
         [0, 0.25, 0.5, 0.75, 1.0]) * 100
-    print(f"[INFO] Selecting batch {len(to_assign_probable_iti)}: "
-          f"Prob range min={prob_stats.iloc[0]:.4f}%, Q1={prob_stats.iloc[1]:.4f}%, "
+    print(f"[INFO] Selecting batch {len(to_assign_probable_iti)}: \n"
+          f"[INFO]    - Prob range: min={prob_stats.iloc[0]:.4f}%, Q1={prob_stats.iloc[1]:.4f}%, "
           f"median={prob_stats.iloc[2]:.4f}%, Q3={prob_stats.iloc[3]:.4f}%, max={prob_stats.iloc[4]:.4f}%")
 
     return rid_iti_pairs
@@ -356,41 +360,119 @@ def _preassign_get_overload(left_df, assigned_df, rid_iti_pairs):
     return overload_train_section
 
 
-def _finalize_assignment(rid_iti_pairs, penalized_iti_in_pre_assign, most_probable_iti, overload_batch_size):
-    """
-    Assign safe rid + top N overload rid.
-    """
-    overload_rids_sorted = (
-        penalized_iti_in_pre_assign[['rid', 'iti_id']]
-        .drop_duplicates(['rid', 'iti_id'])
-        .merge(most_probable_iti, on=["rid", "iti_id"], how="left")
-        .sort_values(by='prob', ascending=False)
-    )
+# def _finalize_assignment(rid_iti_pairs, penalized_iti_in_pre_assign, most_probable_iti, overload_batch_size):
+#     """
+#     Assign safe rid + top N overload rid.
+#     """
+#     overload_rids_sorted = (
+#         penalized_iti_in_pre_assign[['rid', 'iti_id']]
+#         .drop_duplicates(['rid', 'iti_id'])
+#         .merge(most_probable_iti, on=["rid", "iti_id"], how="left")
+#         .sort_values(by='prob', ascending=False)
+#     )
 
-    selected_overload_pairs = overload_rids_sorted.head(
-        overload_batch_size)[['rid', 'iti_id']].values
+#     selected_overload_pairs = overload_rids_sorted.head(
+#         overload_batch_size)[['rid', 'iti_id']].values
 
-    overload_rids = penalized_iti_in_pre_assign['rid'].unique()
-    safe_rids = np.setdiff1d(rid_iti_pairs[:, 0], overload_rids)
-    safe_mask = np.isin(rid_iti_pairs[:, 0], safe_rids)
-    safe_pairs = rid_iti_pairs[safe_mask]
+#     overload_rids = penalized_iti_in_pre_assign['rid'].unique()
+#     safe_rids = np.setdiff1d(rid_iti_pairs[:, 0], overload_rids)
+#     safe_mask = np.isin(rid_iti_pairs[:, 0], safe_rids)
+#     safe_pairs = rid_iti_pairs[safe_mask]
 
-    final_assign_pairs = np.vstack([safe_pairs, selected_overload_pairs])
+#     final_assign_pairs = np.vstack([safe_pairs, selected_overload_pairs])
+#     final_assign_df = pd.DataFrame(final_assign_pairs, columns=['rid', 'iti_id'])
+#     final_assign_with_prob = final_assign_df.merge(
+#         most_probable_iti, on=['rid', 'iti_id'], how='left'
+#     )
+#     prob_stats = final_assign_with_prob['prob'].quantile([0, 0.25, 0.5, 0.75, 1.0]) * 100
 
-    print(
-        f"[INFO] → Assigning {len(safe_pairs)} safe rids + {len(selected_overload_pairs)} overload rids = total {len(final_assign_pairs)} rids.")
+#     print(f"[INFO]    - Reselect batch {len(final_assign_pairs)}: ({len(safe_pairs)} safe + {len(selected_overload_pairs)} overload)\n"
+#           f"[INFO]    - Prob range: min={prob_stats.iloc[0]:.4f}%, Q1={prob_stats.iloc[1]:.4f}%, "
+#           f"median={prob_stats.iloc[2]:.4f}%, Q3={prob_stats.iloc[3]:.4f}%, max={prob_stats.iloc[4]:.4f}%")
+
+#     assign_feas_iti_to_trajectory(rid_iti_pairs=final_assign_pairs)
     
-    final_assign_df = pd.DataFrame(final_assign_pairs, columns=['rid', 'iti_id'])
-    final_assign_with_prob = final_assign_df.merge(
-        most_probable_iti, on=['rid', 'iti_id'], how='left'
-    )
-    prob_stats = final_assign_with_prob['prob'].quantile([0, 0.25, 0.5, 0.75, 1.0]) * 100
+    
+def _finalize_assignment(
+    rid_iti_pairs: np.ndarray,
+    overload_rids: np.ndarray,
+    most_probable_iti: pd.DataFrame,
+    overload_batch_size: int
+):
+    """
+    Assign safe rids + top N overload rids in the current batch.
 
-    print(f"[INFO] Reselect batch {len(final_assign_pairs)}. Prob range "
-          f"min={prob_stats.iloc[0]:.4f}%, Q1={prob_stats.iloc[1]:.4f}%, "
+    This function finalizes the assignment by selecting:
+    
+    1. All rid-iti pairs where rid is not in `overload_rids` (safe assignments).
+    2. The top `overload_batch_size` rids from `overload_rids`, selected from 
+       `most_probable_iti` based on highest probability.
+
+    The function ensures:
+    
+    - For each rid, either assign or delay as a whole (no partial assignment).
+    - Only one itinerary per rid is assigned (the highest-probability one, 
+      pre-sorted in `most_probable_iti`).
+
+    :param rid_iti_pairs: 
+        Array of shape (N, 2), containing selected [rid, iti_id] pairs in the batch.
+    :type rid_iti_pairs: np.ndarray
+
+    :param overload_rids: 
+        Array of unique rid (int) involved in overload conditions, detected in this batch.
+    :type overload_rids: np.ndarray
+
+    :param most_probable_iti: 
+        DataFrame sorted by descending probability, containing at least columns:
+        ['rid', 'iti_id', 'prob'].
+    :type most_probable_iti: pd.DataFrame
+
+    :param overload_batch_size: 
+        Maximum number of overload rids to be force-assigned in this batch.
+    :type overload_batch_size: int
+
+    --------
+    Output:
+        Writes assignment by calling `assign_feas_iti_to_trajectory()`.
+        Logs assignment statistics.
+    """
+    # Identify safe rids: rid in rid_iti_pairs but NOT in overload_rids
+    safe_rids = np.setdiff1d(rid_iti_pairs[:, 0], overload_rids)
+
+    # Select safe rid-iti pairs from most_probable_iti
+    safe_pairs = most_probable_iti[
+        most_probable_iti["rid"].isin(safe_rids)
+    ][["rid", "iti_id"]].values
+
+    # Select overload rid-iti pairs (top N from most_probable_iti)
+    overload_pairs = most_probable_iti[
+        most_probable_iti["rid"].isin(overload_rids)
+    ].head(overload_batch_size)[["rid", "iti_id"]].values
+
+    # Combine safe + overload
+    final_assign_pairs = np.vstack([safe_pairs, overload_pairs])
+
+    # Logging
+    # print(f"[INFO]    - Assigning {len(safe_pairs)} safe rids + {len(overload_pairs)} overload rids → total {len(final_assign_pairs)} rids.")
+
+    # Compute probability statistics
+    final_assign_df = pd.DataFrame(final_assign_pairs, columns=["rid", "iti_id"])
+    final_assign_with_prob = final_assign_df.merge(
+        most_probable_iti, on=["rid", "iti_id"], how="left"
+    )
+    prob_stats = final_assign_with_prob["prob"].quantile([0, 0.25, 0.5, 0.75, 1.0]) * 100
+
+    # print(f"[INFO]    - Assigned prob range: "
+    #       f"min={prob_stats.iloc[0]:.4f}%, Q1={prob_stats.iloc[1]:.4f}%, "
+    #       f"median={prob_stats.iloc[2]:.4f}%, Q3={prob_stats.iloc[3]:.4f}%, "
+    #       f"max={prob_stats.iloc[4]:.4f}%")
+    print(f"[INFO]    - Reselect batch {len(final_assign_pairs)}: ({len(safe_pairs)} safe + {len(overload_pairs)} overload)\n"
+          f"[INFO]    - Prob range: min={prob_stats.iloc[0]:.4f}%, Q1={prob_stats.iloc[1]:.4f}%, "
           f"median={prob_stats.iloc[2]:.4f}%, Q3={prob_stats.iloc[3]:.4f}%, max={prob_stats.iloc[4]:.4f}%")
 
-    assign_feas_iti_to_trajectory(rid_iti_pairs=final_assign_pairs)
+    # Perform assignment
+    assign_feas_iti_to_trajectory(final_assign_pairs)
+
 
 
 def dynamic_assignment():
@@ -402,26 +484,32 @@ def dynamic_assignment():
         config.CONFIG["results"]["dis"], show_timer=False)
     left = read_(config.CONFIG["results"]["left"], show_timer=False)
     assigned = read_all(config.CONFIG["results"]["assigned"], show_timer=False)
-    overload_train_section = find_overload_train_section(assigned=assigned)
+    current_overload_train_section = find_overload_train_section(assigned=assigned)
 
     feas_iti_prob, most_probable_iti = _prepare_dis_penal_prob(
-        left, assigned, dis_attached_iti_from_file, overload_train_section)
+        left, assigned, dis_attached_iti_from_file, current_overload_train_section)
 
-    while not left.empty or most_probable_iti.empty:
+    while not left.empty:
+        
+        if most_probable_iti.empty:
+            print("[INFO] No feasible itinerary left to assign → break loop")
+            break
+        
+        print(f"\n[INFO] == Start assignment step with {left['rid'].nunique()} rids left ==\n")
         rid_iti_pairs = _select_batch(most_probable_iti, bs)
 
-        overload_train_section = _preassign_get_overload(
+        preassign_overload_train_section = _preassign_get_overload(
             left, assigned, rid_iti_pairs)
 
-        if len(overload_train_section) == 0:
-            print("[INFO] No overload → commit full batch")
+        if len(preassign_overload_train_section) == 0:
+            print("[INFO]    - No overload → commit full batch")
             assign_feas_iti_to_trajectory(rid_iti_pairs)
         else:
             # cols: rid, iti_id, path_id, seg_id, train_id, board_ts, alight_ts, penalty
             penalized_iti_in_pre_assign = pd.merge(
                 left=left[left['rid'].isin(rid_iti_pairs[:, 0])],
                 right=build_penal_mapper_df(
-                    overload_train_section, 
+                    preassign_overload_train_section, 
                     penal_func_type=config.CONFIG["parameters"]["penalty_type"],
                     penal_agg_method=config.CONFIG["parameters"]["penalty_agg_method"],
                 ),
@@ -430,37 +518,40 @@ def dynamic_assignment():
             )
             # remove not-penalized rid-iti pairs
             penalized_iti_in_pre_assign.dropna(subset=["penalty"], inplace=True)
-            overload_rid_count = penalized_iti_in_pre_assign["rid"].nunique()
+            overload_rids = penalized_iti_in_pre_assign["rid"].unique()
+            overload_rid_count = overload_rids.size
 
             if overload_rid_count <= o_bs:
                 print(
-                    f"[INFO] overload count {overload_rid_count} ≤ {o_bs} → commit full batch")
+                    f"[INFO]    - Overload count {overload_rid_count} ≤ {o_bs} → commit full batch")
                 assign_feas_iti_to_trajectory(rid_iti_pairs)
             else:
                 print(
-                    f"[INFO] overload count {overload_rid_count} > {o_bs} → commit partial")
+                    f"[INFO]    - Overload count {overload_rid_count} > {o_bs} → commit partial")
                 _finalize_assignment(
-                    rid_iti_pairs, penalized_iti_in_pre_assign, most_probable_iti, o_bs)
+                    rid_iti_pairs, overload_rids, most_probable_iti, o_bs)
 
         left = read_(config.CONFIG["results"]["left"], show_timer=False)
-        # assigned = read_all(config.CONFIG["results"]["assigned"], show_timer=False)
         new_assigned = read_(config.CONFIG["results"]["assigned"], latest_=True, show_timer=False)
         assigned = pd.concat([assigned, new_assigned], ignore_index=True)
-        most_probable_iti = most_probable_iti[most_probable_iti["rid"].isin(assigned["rid"]) == False]
-        
-        print(f"[STATUS] left: {left['rid'].unique().size} | assigned: {assigned['rid'].unique().size} | most_probable_iti: {len(most_probable_iti)}")
+        most_probable_iti = most_probable_iti[~most_probable_iti["rid"].isin(assigned["rid"])]
+
+        print(f"[STATUS] left: {left['rid'].nunique()} | assigned: {assigned['rid'].nunique()} | most_probable_iti: {len(most_probable_iti)}")
 
         # only recompute prob if overload detected
-        if len(overload_train_section) > 0:
-            overload_train_section = find_overload_train_section(assigned=assigned)
+        if len(preassign_overload_train_section) > 0:
+            current_overload_train_section = find_overload_train_section(assigned=assigned)
             feas_iti_prob, most_probable_iti = _prepare_dis_penal_prob(
-                left, assigned, dis_attached_iti_from_file, overload_train_section)
-            print(f"[STATUS] Overload_train_section: {overload_train_section.keys()}.")
-    
+                left, assigned, dis_attached_iti_from_file, current_overload_train_section)
+            if current_overload_train_section:
+                trains_to_max_load = {train_id: load_info[:, -1].max() for train_id, load_info in current_overload_train_section.items()}
+                print(f"[STATUS] Overload trains and max loads: {trains_to_max_load}.")
+
     print(f"[INFO] Dynamic assignment finished.")
     left = read_(config.CONFIG["results"]["left"], show_timer=False)
     assigned = read_all(config.CONFIG["results"]["assigned"], show_timer=False)
-    print(f"[STATUS] left: {left['rid'].unique().size} | assigned: {assigned['rid'].unique().size}")
+    print(f"[STATUS] left: {left['rid'].nunique()} | assigned: {assigned['rid'].nunique()}")
+
 
 if __name__ == '__main__':
     config.load_config()

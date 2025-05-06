@@ -33,13 +33,15 @@ def execution_timer(func):
 
         a = time.time()
         start_str = time.strftime("%m-%d %H:%M:%S", time.localtime(a))
-        print(f"[INFO] {func.__name__}({args}, {kw}) executing at {start_str}.")
+        print(
+            f"[INFO] {func.__name__}({args}, {kw}) executing at {start_str}.")
 
         res = func(*args, **kw)  # 执行函数
 
         b = time.time()
         finish_str = time.strftime("%m-%d %H:%M:%S", time.localtime(b))
-        print(f"[INFO] {func.__name__}({args}, {kw}) executed in  {finish_str}. ({start_str} -> {b - a:.4f}s )")
+        print(
+            f"[INFO] {func.__name__}({args}, {kw}) executed in  {finish_str}. ({start_str} -> {b - a:.4f}s )")
         return res
 
     return wrapper
@@ -69,13 +71,13 @@ def tqdm_joblib(tqdm_object):
 def split_fn_index_ext(full_fn: str) -> tuple[str, str, str]:
     """
     Split a filename into its base name, index, and extension.
-    
+
     :param full_fn: The full filename including the base name, index, and extension.
     :type full_fn: str
-    
+
     :return: A tuple containing the base name, index, and extension.
     :rtype: tuple[str, str, str]
-    
+
     Example:
         >>> split_fn_index_ext("egress_times_2.pkl") 
         ('egress_times', '_2', '.pkl')
@@ -175,21 +177,27 @@ def get_latest_file_index(fn: str, folder: str = "", subfolder: str = "", get_ne
                 return i
             return i - 1
     else:
-        raise RuntimeError(f"Could not find latest file index: all {base_fn}_1{ext} to _10000{ext} exist.")
+        raise RuntimeError(
+            f"Could not find latest file index: all {base_fn}_1{ext} to _10000{ext} exist.")
 
 
 @execution_timer
-def read_(fn: str = "AFC", show_timer: bool = False, drop_cols: bool = True,
-          latest_: bool = False) -> pd.DataFrame | dict | list:
+def read_(
+    fn: str = "AFC",
+    show_timer: bool = False,
+    drop_cols: bool = True,
+    latest_: bool = False, 
+    quiet_mode: bool = False,
+) -> pd.DataFrame | dict | list:
     """
     Reads a file from a specified folder based on its name and extension. 
-    
+
     The function handles different file formats such as .csv, .parquet, .pkl, 
     and .json, and returns the corresponding data as a pandas DataFrame, 
     dictionary, or list.
 
     :param fn: The name of the file to be read. 
-        
+
         The file name can be specified without an extension, and the function 
         will automatically append the appropriate extension (.pkl, .csv, 
         .parquet, or .json) based on the file type.
@@ -206,15 +214,19 @@ def read_(fn: str = "AFC", show_timer: bool = False, drop_cols: bool = True,
 
     :param latest_: If set to True, the function will read the latest version of 
         the file based on the file name. 
-        
+
         The latest version is determined by checking for files with the same base 
         name but with an index suffix (_1, _2, etc.).
-        
+
         If no latest version is found, the function will raise a FileNotFoundError.
     :type latest_: bool, optional, default=False
+    
+    :param quiet_mode: If set to True, the function will not print any messages
+        to the console.
+    :type quiet_mode: bool, optional, default=False
 
     :returns: The function returns a pandas DataFrame, dictionary, or list, depending on the file format:
-        
+
         - DataFrame for .csv, .parquet, and .pkl files.
         - Dictionary for .json files.
     :rtype: pd.DataFrame | dict | list
@@ -237,7 +249,8 @@ def read_(fn: str = "AFC", show_timer: bool = False, drop_cols: bool = True,
     [INFO] Reading file: data\platform.json
     """
     fp = get_file_path(fn, latest_)
-    print("[INFO] Reading file:", fp)
+    if not quiet_mode:
+        print("[INFO] Reading file:", fp)
 
     if fp.endswith(".csv"):
         df = pd.read_csv(fp)
@@ -248,13 +261,15 @@ def read_(fn: str = "AFC", show_timer: bool = False, drop_cols: bool = True,
     elif fp.endswith(".json"):
         with open(fp, "r", encoding="utf-8") as f:
             df = json.load(f)
-            df = {int(key) if key.isdigit() else key: value for key, value in df.items()}
+            df = {int(key) if key.isdigit()
+                  else key: value for key, value in df.items()}
     else:
         raise ValueError(f"Unknown file extension: {fp}")
 
     if drop_cols:
         if fn == "AFC":
-            df = df.drop(columns=["STATION1_NID", "STATION2_NID", "STATION1_TIME", "STATION2_TIME"])
+            df = df.drop(
+                columns=["STATION1_NID", "STATION2_NID", "STATION1_TIME", "STATION2_TIME"])
         elif fn == "STA":
             df = df.drop(columns=["STATION_NAME", "STATION_NAME_E"])
         elif fn == "TT":
@@ -295,15 +310,18 @@ def save_(fn: str, data: pd.DataFrame, auto_index_on: bool = False, verbose: boo
     if fn.endswith(".pkl"):
         saving_method = data.to_pickle
     elif fn.endswith(".csv"):
-        saving_method = lambda x: data.to_csv(x, index=data.index.name is not None)  # Keep index name if it exists
+        def saving_method(x): return data.to_csv(
+            x, index=data.index.name is not None)  # Keep index name if it exists
     elif fn.endswith(".parquet"):
         saving_method = data.to_parquet
     else:
-        raise ValueError("Only .pkl, .csv, .parquet files can be saved using this method.")
+        raise ValueError(
+            "Only .pkl, .csv, .parquet files can be saved using this method.")
 
     fp = get_file_path(fn)  # Use the same function to get the correct path
     if auto_index_on:
-        fp = fp.split(".")[0] + f"_{get_latest_file_index(fp, get_next=True)}." + fp.split(".")[-1]
+        fp = fp.split(
+            ".")[0] + f"_{get_latest_file_index(fp, get_next=True)}." + fp.split(".")[-1]
 
     if verbose:
         print(data.sample(n=min(10, len(data))))
@@ -318,10 +336,10 @@ def save_(fn: str, data: pd.DataFrame, auto_index_on: bool = False, verbose: boo
 def read_all(fn: str, show_timer: bool = False) -> pd.DataFrame:
     """
     Reads all versioned files (e.g., base_1.pkl ~ base_10000.pkl) and concatenates them into a single DataFrame.
-    
+
     :param fn: Prefix of the file.
     :type fn: str
-    
+
     :param show_timer: Whether to show timing information.
     :type show_timer: bool
 

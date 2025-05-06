@@ -11,8 +11,8 @@ from src import config
 def test1():
     from src.trajectory import roll_back_assignment
     
-    # for _ in range(9):
-        # roll_back_assignment()
+    for _ in range(70):
+        roll_back_assignment()
     
     ...
 

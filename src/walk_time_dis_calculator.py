@@ -534,7 +534,7 @@ def _test_feas_iti_dis_calculate(rid: int, iti_id: int, df_left: pd.DataFrame) -
     return [entry_dis, egress_dis, transfer_dis_product, egress_dis_square]
 
 
-def _test_feas_iti_dis_calculate_one_rid(rid: int, plot_seg_trains: bool = True):
+def _test_feas_iti_dis_calculate_one_rid(rid: int, plot_seg_trains: bool = True, df_left: pd.DataFrame = None):
     """
     Evaluate and summarize all feasible itineraries for a given RID.
     Plot all segment-level trains after probability printing if enabled.
@@ -544,11 +544,14 @@ def _test_feas_iti_dis_calculate_one_rid(rid: int, plot_seg_trains: bool = True)
 
     :param plot_seg_trains: Whether to plot segment-level trains for visual inspection.
     :type plot_seg_trains: bool, optional, default=True
+    
+    :param df_left: DataFrame of all feasible itineraries (filtered from 'left').
+    :type df_left: pd.DataFrame, optional, default=None
     """
     from src.utils import read_
     from src.passenger import _plot_check_feas_iti
 
-    df_left = read_("left", latest_=False, show_timer=False)
+    df_left = read_("left", latest_=False, show_timer=False) if df_left is None else df_left
 
     if rid is None:
         rid = np.random.choice(df_left["rid"].unique())
