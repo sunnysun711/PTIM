@@ -1,27 +1,29 @@
 """
 This module manages feasible itinerary assignment and partitioning for passenger trajectories.
 
-Core Responsibilities:
-1. Select and assign valid itineraries from feas_iti_left.pkl based on rules (e.g., probabilities in feas_iti_prob.pkl).
-2. Save newly assigned itineraries into feas_iti_assigned_X.pkl (via file_auto_index_saver).
-3. Optionally split feas_iti.pkl into three categories for initial preprocessing:
-    - feas_iti_assigned.pkl: Only one itinerary per rid
-    - feas_iti_stashed.pkl: Too many itineraries (above threshold)
-    - feas_iti_left.pkl: Multiple but manageable itineraries (to-be-assigned)
+Core Responsibilities
+---------------------
+1. Select and assign valid itineraries from ``feas_iti_left.pkl`` based on rules (e.g., probabilities in ``feas_iti_prob.pkl``).
+2. Save newly assigned itineraries into ``feas_iti_assigned_X.pkl`` (auto-incremented filenames).
+3. Optionally split ``feas_iti.pkl`` into three categories for preprocessing:
+
+   - ``feas_iti_assigned.pkl``: Only one itinerary per rid
+   - ``feas_iti_stashed.pkl``: Too many itineraries (above threshold)
+   - ``feas_iti_left.pkl``: Multiple but manageable itineraries (to-be-assigned)
 
 This module is crucial for iterative, rule-based refinement and reassignment of feasible itineraries.
 
-Key Functions:
-- split_feas_iti: One-time utility to prepare initial data subsets
-- (To be implemented): rule_based_assignment_from_left
+Key Functions
+-------------
+- ``split_feas_iti``: One-time utility to prepare initial data subsets
+- ``dynamic_assignment``: Iteratively assign feasible itineraries with overload handling
 
-Dependencies:
+Dependencies
+------------
 - src.utils: File I/O handling
+- src.itinerary: Itinerary probability and penalty computation
+- src.timetable: Overload train section detection
 
-Data Sources:
-- feas_iti.pkl
-- assigned_1.pkl (will generate)
-- left.pkl (will generate)
 """
 import os
 
@@ -91,6 +93,9 @@ def _get_sorted_data_and_first_idx_and_uniqueness(feas_iti_prob: pd.DataFrame) -
     """
     Internal helper: return sorted data, unique_rids, first_idx, is_unique_max.
     Use numpy lexsort to enhance performance.
+    
+    :param feas_iti_prob: DataFrame with index [rid, iti_id], column 'prob'.
+    :return: tuple of (sorted_data, unique_rids, first_idx, is_unique_max).
     """
     data = feas_iti_prob.reset_index()[["rid", "iti_id", "prob"]].to_numpy()
     sorted_idx = np.lexsort((-data[:, 2], data[:, 0]))
@@ -169,11 +174,11 @@ def find_multiple_max_prob_rids(feas_iti_prob: pd.DataFrame) -> np.ndarray:
     data_sorted, unique_rids, first_idx, is_unique_max = _get_sorted_data_and_first_idx_and_uniqueness(
         feas_iti_prob)
 
-    prob_first = data_sorted[first_idx, 2]
-    # second max prob, potentially equal to max_prob
-    prob_next = data_sorted[first_idx + 1, 2]
+    # prob_first = data_sorted[first_idx, 2]
+    # # second max prob, potentially equal to max_prob
+    # prob_next = data_sorted[first_idx + 1, 2]
 
-    is_unique_max = prob_first != prob_next  # check uniqueness
+    # is_unique_max = prob_first != prob_next  # check uniqueness
 
     non_unique_rids = unique_rids[~is_unique_max]
     # print(f"Number of rid with non-unique max prob: {len(non_unique_rids)}")
@@ -287,6 +292,11 @@ def roll_back_assignment():
 
 
 def _prepare_dis_penal_prob(left_df, assigned_df, dis_attached_iti_from_file, overload_train_section):
+    """
+    Pipeline: recompute penalties of in_vehicle links and iti probabilities.
+
+    Recomputes probability table for current left_df, given current overload_train_section.
+    """
     dis_attached_iti = filter_dis_file(
         dis_df_from_file=dis_attached_iti_from_file, left=left_df)
 
@@ -313,6 +323,9 @@ def _prepare_dis_penal_prob(left_df, assigned_df, dis_attached_iti_from_file, ov
 
 
 def _select_batch(most_probable_iti, batch_size):
+    """
+    Select batch_size top-rid-iti pairs.
+    """
     to_assign_probable_iti = most_probable_iti.head(batch_size)  # [rid, iti_id, prob]
     rid_iti_pairs = to_assign_probable_iti[['rid', 'iti_id']].values
 
@@ -326,6 +339,9 @@ def _select_batch(most_probable_iti, batch_size):
 
 
 def _preassign_get_overload(left_df, assigned_df, rid_iti_pairs):
+    """
+    Simulate pre-assigning rid_iti_pairs and check resulting overload.
+    """
     pre_assign_df = left_df.merge(pd.DataFrame(rid_iti_pairs, columns=[
                                   "rid", "iti_id"]), on=["rid", "iti_id"], how="inner")
     assigned_plus_pre = pd.concat(
@@ -338,6 +354,14 @@ def _preassign_get_overload(left_df, assigned_df, rid_iti_pairs):
 
 
 def _finalize_assignment(rid_iti_pairs, penalized_iti_in_pre_assign, feas_iti_prob, overload_batch_size):
+    """
+    Assign safe rid + top N overload rid.
+
+    Notes
+    -----
+    - Uses feas_iti_prob (full prob table) instead of most_probable_iti (single best per rid)
+      → ensures every [rid, iti_id] can get prob merged.
+    """
     overload_rids_sorted = (
         penalized_iti_in_pre_assign[['rid', 'iti_id']]
         .drop_duplicates(['rid', 'iti_id'])
@@ -415,12 +439,12 @@ def dynamic_assignment():
             config.CONFIG["results"]["assigned"], show_timer=False)
         most_probable_iti = most_probable_iti[most_probable_iti["rid"].isin(assigned["rid"]) == False]
 
+        # if input("Continue? (input 'n' to break): ") == "n":
+        #     break
         # only recompute prob if overload detected
         if len(overload_train_section) > 0:
             feas_iti_prob, most_probable_iti = _prepare_dis_penal_prob(
                 left, assigned, dis_attached_iti_from_file, overload_train_section)
-        if input("Continue? (input 'n' to break): ") == "n":
-            break
 
 
 if __name__ == '__main__':

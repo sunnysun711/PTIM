@@ -189,11 +189,11 @@ def _build_penalty_dict_array(
 
             for j in range(i + 1, n):
                 if tt_filtered[j, 1] == tt_filtered[i, 1]:
-                    break
+                    break  # Line 7: no looping back to same station, break
 
                 alight_ts = alight_ts_arr[j]
                 if alight_ts < overload_alight_ts_earliest:
-                    break
+                    continue  # Fix [2025-05-06 15:43]: avoid premature break; this alight_ts too early to overlap, but later alight_ts may still overlap overload section
 
                 dep_ts_arr = overload_sections[:, 1]
                 arr_ts_arr = overload_sections[:, 3]
@@ -273,25 +273,25 @@ if __name__ == "__main__":
 
     from src.timetable import get_ti2c, reset_ti2c
 
-    reset_ti2c()
-    config.CONFIG["parameters"]["TRAIN_A_AREA"] = 50
-    config.CONFIG["parameters"]["TRAIN_B_AREA"] = 50
-    print(np.unique([i for i in get_ti2c().values()]))
+    # reset_ti2c()
+    # config.CONFIG["parameters"]["TRAIN_A_AREA"] = 50
+    # config.CONFIG["parameters"]["TRAIN_B_AREA"] = 50
+    # print(np.unique([i for i in get_ti2c().values()]))
 
     res = build_penal_mapper_df(
-        overload_train_section={10200956: np.array(
-            [[10241, 29678, 10240, 29761, 605],
-             [10240, 29796, 10239, 29862, 622],
-             [10239, 29899, 10238, 30006, 620]]
+        overload_train_section={10100518: np.array(
+            [[10129, 31513, 10130, 31590,  1645],
+            [10130, 31627, 10131, 31708,  1673],
+            [10131, 31745, 10132, 31832,  1619],
+            [10132, 31877, 10133, 31975,  1994],
+            [10133, 32012, 10134, 32102,  1762]]
         )
         },
         penal_func_type="x",
         penal_agg_method="min",
-        debug=True
     )
 
-    np.set_printoptions(precision=6, suppress=True, linewidth=180)
+    # np.set_printoptions(precision=6, suppress=True, linewidth=180)
 
-    for k, v in res.items():
-        print(k, "\n", v)
+    print(res)
     pass
