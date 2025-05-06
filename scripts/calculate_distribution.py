@@ -1,3 +1,20 @@
+"""
+This script calculates walking time distributions for all walk links 
+in all left feasible itineraries and saves the results.
+
+Please make sure the parameters in the config file are correctly set,
+especially "penalty_type".
+
+Key Outputs:
+- dis.pkl: Walking time distribution data for each itinerary link 
+    (in trajectory subfolder)
+
+Dependencies:
+- src.itinerary
+- src.walk_time_dis_calculator
+- src.globals
+- src.utils
+"""
 from src import config
 from src.itinerary import attach_walk_dis_all
 from src.utils import read_, save_
@@ -29,9 +46,6 @@ def main():
 
 
 if __name__ == "__main__":
-    config.load_config()
+    config.load_config("configs/config3.yaml")
     # main()
     pass
-
-    
-    

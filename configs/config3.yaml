@@ -10,7 +10,7 @@ results_folder: "results"
 results_subfolder:
   network: "network"
   itinerary: "itinerary"
-  trajectory: "trajectory"
+  trajectory: "trajectory_3"
   egress: "egress"
   transfer: "transfer"
 results:

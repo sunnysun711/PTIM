@@ -1,3 +1,15 @@
+"""
+This script splits the feasible itineraries into three categories 
+based on the number of itineraries per passenger (rid).
+
+Key Outputs:
+- assigned_1.pkl: Passengers with exactly one feasible itinerary. _1 is for file auto indexer.
+- stashed.pkl: Passengers with more than `feas_iti_cnt_limit` itineraries
+- left.pkl: Passengers with multiple itineraries but not exceeding `feas_iti_cnt_limit`
+
+Dependencies:
+- src.trajectory
+"""
 from src.trajectory import split_feas_iti
 
 

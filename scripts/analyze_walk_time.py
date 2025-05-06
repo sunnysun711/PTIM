@@ -1,3 +1,21 @@
+"""
+This script analyzes assigned passenger walking times (egress and transfer) 
+and generates their statistical distributions.
+
+Key Outputs:
+- egress_times.pkl: Raw egress time data
+- transfer_times.pkl: Raw transfer time data
+- ETD figures: Egress time distribution plots
+- TTD figures: Transfer time distribution plots
+- etd.csv: Fitted egress time distribution parameters
+- ttd.csv: Fitted transfer time distribution parameters
+
+Dependencies:
+- src.walk_time_filter
+- src.walk_time_plot
+- src.walk_time_dis_fit
+- src.utils
+"""
 from src import config
 from src.utils import save_, read_, pd
 from src.walk_time_filter import filter_egress_all, filter_transfer_all
