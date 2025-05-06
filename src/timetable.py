@@ -323,7 +323,7 @@ def plot_timetable(li: int = 2, upd: list = None, show_load=True, save_subfolder
 
     cap, cap_max = get_ti2c()[tid]
     # create linecollection
-    lc = LineCollection(segments, cmap='jet', norm=plt.Normalize(0, cap_max))
+    lc = LineCollection(segments, cmap='jet', norm=plt.Normalize(0, cap_max*1.3))  # to see severe overload situations
     # Set the values used for colormapping
     lc.set_array(load_values)
     lc.set_linewidth(0.8)
@@ -374,9 +374,12 @@ def plot_timetable_all(save_subfolder: str, separate_upd: bool = False, assigned
 
 
 if __name__ == '__main__':
-    config.load_config()
+    for version in ["_greedy", "1", "2"]:
+        config.load_config(f"configs/config{version}.yaml")
+        print("\n === Version: ", version, "===\n")
+        
+        plot_timetable_all(f"TT_config{version}", separate_upd=True)
 
-    plot_timetable_all("TT_until_assigned_541", separate_upd=True)
-    # overload_info = find_overload_train_section()
-    # print(overload_info)
+        overload_info = find_overload_train_section(suppress_warning=False)  # will print warnings
+        # print(overload_info)
     

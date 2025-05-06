@@ -10,7 +10,7 @@ results_folder: "results"
 results_subfolder:
   network: "network"
   itinerary: "itinerary"
-  trajectory: "trajectory_1"
+  trajectory: "trajectory__greedy"
   egress: "egress"
   transfer: "transfer"
 results:
@@ -58,7 +58,7 @@ parameters:
   penalty_type: "x" # ["x", "x2", "x2_", "y2", "y2_"] or a number for normal CDF penalty
   penalty_agg_method: "min" # "min", "mean", or "prod"
   # parameters for trajectory assignment
-  strategy: "dynamic" # "dynamic" or "greedy"
+  strategy: "greedy" # "dynamic" or "greedy"
   batch_size: 20_0000
   overload_batch_size: 1_00
 

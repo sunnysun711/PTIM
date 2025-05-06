@@ -34,13 +34,14 @@ from src.utils import read_, read_all
 from src.globals import get_afc, get_k_pv, get_platform
 
 
-def get_egress_from_left() -> pd.DataFrame:
+def get_egress_from_left() -> pd.DataFrame | None:
     """
     Find rids in left.pkl where all feasible itineraries share the same final train_id.
     In this case, all itineraries of that rid lead to the same egress time.
 
     :return: 
         DataFrame with the shape (n_rids, 5), where "rid" serves as the index.
+        If left is empty, return None.
         It includes the following columns:
 
         - `node1`: The starting node of the egress path.
@@ -48,9 +49,11 @@ def get_egress_from_left() -> pd.DataFrame:
         - `alight_ts`: The time when the passenger alighted from the vehicle.
         - `ts2`: The time when the passenger exited the station.
         - `egress_time`: The calculated egress time, which is the difference between `ts2` and `alight_ts`.
-    :rtype: pd.DataFrame
+    :rtype: pd.DataFrame | None
     """
     df = read_(config.CONFIG["results"]["left"], show_timer=False)
+    if df.empty:
+        return None
 
     # Keep only the last segment for each itinerary of one rid
     last_seg_all_iti = df.groupby(["rid", "iti_id"]).last().reset_index()
@@ -92,7 +95,7 @@ def get_egress_from_assigned() -> pd.DataFrame:
     return _calculate_egress_time(last_seg)
 
 
-def _calculate_egress_time(df_last_seg: pd.DataFrame) -> pd.DataFrame:
+def _calculate_egress_time(df_last_seg: pd.DataFrame | None) -> pd.DataFrame:
     """
     A helper function designed to calculate the egress time for a specified set of passenger IDs (rids).
     It enriches the input DataFrame with necessary columns and computes the egress time for each passenger.
@@ -100,6 +103,8 @@ def _calculate_egress_time(df_last_seg: pd.DataFrame) -> pd.DataFrame:
 
     :param df_last_seg: A DataFrame that holds the last segment information of each itinerary.
                         Each row corresponds to a unique passenger, identified by the "rid" index.
+                        If input None, returns an empty DataFrame.
+    :type df_last_seg: pd.DataFrame | None
 
     :return: 
         DataFrame with the shape (n_rids, 5), where "rid" serves as the index.
@@ -115,6 +120,8 @@ def _calculate_egress_time(df_last_seg: pd.DataFrame) -> pd.DataFrame:
     :raises AssertionError: If the last segment found does not match the last segment in the path,
                         indicating a potential data inconsistency.
     """
+    if df_last_seg is None:
+        return pd.DataFrame([], columns=["node1", "node2", "alight_ts", "ts2", "egress_time"])
     afc = get_afc()
     k_pv = get_k_pv()
 

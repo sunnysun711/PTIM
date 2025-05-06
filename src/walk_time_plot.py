@@ -159,9 +159,10 @@ def _plot_walk_time_dis(
 
 
 def plot_egress_all(
-        eg_t: pd.DataFrame,
-        save_subfolder: str = "",
-        save_on: bool = True,
+    eg_t: pd.DataFrame,
+    save_subfolder: str = "",
+    save_on: bool = True,
+    abs_max:int=500
 ):
     """
     Generates and saves egress time distribution plots (scatter, histogram, 
@@ -185,6 +186,10 @@ def plot_egress_all(
     :param save_on: If True, saves the plots to PDF and PNG files. 
         If False, shows the plots interactively.
     :type save_on: bool, optional, default=True
+    
+    :param abs_max: The absolute maximum value for egress time.
+        Egress times exceeding this value will be removed.
+    :type abs_max: int, optional, default=500
     """
     platforms = get_platform()  # pp_id, node_id, uid
 
@@ -216,7 +221,7 @@ def plot_egress_all(
             title = f"(Egress): {pp_id}_{'-'.join(node_ids)}"
             raw_size = et.shape[0]
             lb, ub = reject_outlier_bd(
-                data=et['egress_time'].values, method="zscore", abs_max=500)
+                data=et['egress_time'].values, method="zscore", abs_max=abs_max)
             et = et[(et['egress_time'] >= lb) & (et['egress_time'] <= ub)]
             print(
                 f"{title} | Data size: {et.shape[0]} / {raw_size} | BD: [{lb:.4f}, {ub:.4f}]")
@@ -238,6 +243,7 @@ def plot_transfer_all(
     tr_t: pd.DataFrame,
     save_subfolder: str = "",
     save_on: bool = True,
+    abs_max:int=500,
 ):
     """
     Generates and saves transfer time distribution plots (scatter, histogram, 
@@ -268,6 +274,9 @@ def plot_transfer_all(
     :param save_on: If True, saves the plots to PDF and PNG files. 
         If False, shows the plots interactively.
     :type save_on: bool, optional, default=True
+    
+    :param abs_max: absolute max value for transfer time
+    :type abs_max: int, optional, default=500
     """
     saving_dir = config.CONFIG["figure_folder"] + "/" + save_subfolder
     if save_subfolder and not os.path.exists(saving_dir):
@@ -283,7 +292,7 @@ def plot_transfer_all(
         title = f"(Transfer egress-entry): {pp_id_min}-{pp_id_max}"
         raw_size = df_.shape[0]
         data_bd = reject_outlier_bd(
-            data=df_["transfer_time"].values, method="zscore", abs_max=500)
+            data=df_["transfer_time"].values, method="zscore", abs_max=abs_max)
         df_ = df_[(df_["transfer_time"] >= data_bd[0]) &
                   (df_["transfer_time"] <= data_bd[1])]
         print(

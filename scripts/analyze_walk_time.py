@@ -8,6 +8,15 @@ from src.walk_time_dis_fit import (
 )
 
 
+def analyze_assigned_walk_times():
+    # eg_t = filter_egress_all()
+    tr_t = filter_transfer_all()
+    
+    # plot_egress_all(eg_t, save_on=True, save_subfolder="ETD541")
+    plot_transfer_all(tr_t, save_on=True, save_subfolder="TTD541", abs_max=2000)
+    ...
+
+
 def main():
     """
     Main function to save filtered walk times and physical links information.
@@ -384,4 +393,5 @@ memory usage: 334.9 KB
 if __name__ == "__main__":
     config.load_config()
     # main()
+    analyze_assigned_walk_times()
     ...

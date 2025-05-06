@@ -15,6 +15,7 @@ import contextlib
 import functools
 import json
 import os
+import sys
 import time
 
 import joblib
@@ -377,5 +378,22 @@ def ts2tstr(ts: int, include_seconds: bool = False) -> str:
         return f"{h:02}:{m:02}"
 
 
-if __name__ == '__main__':
-    print(ts2tstr(75081, False))
+class AssignLogger:
+    """
+    Assignment Logger, writes to both terminal and log file.
+    
+    Log file is named by config.CONFIG["results"]["assignment_log"].
+    """
+    def __init__(self):
+        self.terminal = sys.stdout
+        self.fn = config.CONFIG["results"]["assignment_log"]
+        log_file_path = get_file_path(self.fn)
+        self.log = open(log_file_path, "a")
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)
+        self.log.flush()
+
+    def flush(self):
+        self.terminal.flush()

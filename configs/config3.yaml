@@ -10,7 +10,7 @@ results_folder: "results"
 results_subfolder:
   network: "network"
   itinerary: "itinerary"
-  trajectory: "trajectory_1"
+  trajectory: "trajectory"
   egress: "egress"
   transfer: "transfer"
 results:
@@ -60,7 +60,7 @@ parameters:
   # parameters for trajectory assignment
   strategy: "dynamic" # "dynamic" or "greedy"
   batch_size: 20_0000
-  overload_batch_size: 1_00
+  overload_batch_size: 5_00
 
   # parameters for train types
   A_LINES:
