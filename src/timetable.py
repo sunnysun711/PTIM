@@ -218,7 +218,7 @@ def plot_timetable(li: int = 2, upd: list = None, show_load=True, save_subfolder
 
     """
     import matplotlib
-    matplotlib.use("TkAgg")
+    matplotlib.use("Qt5Agg")
     from matplotlib import pyplot as plt
     from matplotlib.collections import LineCollection
     from mpl_toolkits.axes_grid1 import make_axes_locatable

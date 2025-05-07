@@ -89,7 +89,7 @@ def penal_func(x: float | int | np.ndarray, capacities: tuple[float, float], fun
 
 def plot_penal_funcs():
     import matplotlib
-    matplotlib.use('TkAgg')
+    matplotlib.use('Qt5Agg')
 
     from matplotlib import pyplot as plt
 

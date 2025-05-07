@@ -408,7 +408,7 @@ class ChengduMetro:
         pos = nx.get_node_attributes(G, 'pos')
 
         import matplotlib
-        matplotlib.use("TkAgg")
+        matplotlib.use("Qt5Agg")
         import matplotlib.pyplot as plt
         plt.figure(figsize=(8, 6))
         nx.draw(G, pos, **options)

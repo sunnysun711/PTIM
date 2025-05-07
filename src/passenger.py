@@ -186,7 +186,7 @@ def plot_seg_trains(k_pv: np.ndarray, ts1: int, ts2: int):
     :type ts2: int
     """
     import matplotlib
-    matplotlib.use("TkAgg")
+    matplotlib.use("Qt5Agg")
     import matplotlib.pyplot as plt
 
     path_id_seg_trains: dict[int, list[list[tuple[int, int, int]]]] = {}

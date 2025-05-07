@@ -3,7 +3,7 @@ This script calculates walking time distributions for all walk links
 in all left feasible itineraries and saves the results.
 
 Please make sure the parameters in the config file are correctly set,
-especially "penalty_type".
+especially "distribution_type".
 
 Key Outputs:
 - dis.pkl: Walking time distribution data for each itinerary link 

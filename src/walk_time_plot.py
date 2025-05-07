@@ -72,7 +72,7 @@ def _plot_walk_time_dis(
     :rtype: None | plt.Figure
     """
     if show_:
-        matplotlib.use("TkAgg")  # Use TkAgg backend for interactive plotting
+        matplotlib.use("Qt5Agg")  # Use TkAgg backend for interactive plotting
     else:
         matplotlib.use("Agg")  # Use non-interactive backend for saving figures
 

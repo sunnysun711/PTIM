@@ -37,7 +37,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Run the script with a given config file.")
     parser.add_argument(
-        "--config",
+        "--config", "-c",
         type=str,
         required=False,  # Optional argument to allow defaults
         default="configs/config3.yaml",  # Default config path
