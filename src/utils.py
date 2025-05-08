@@ -383,12 +383,21 @@ class AssignLogger:
     Assignment Logger, writes to both terminal and log file.
     
     Log file is named by config.CONFIG["results"]["assignment_log"].
+    
+    Usage:
+    ```python
+    sys.stdout = AssignLogger()
+    ```
     """
-    def __init__(self):
+    def __init__(self, fn:str=None):
         self.terminal = sys.stdout
-        self.fn = config.CONFIG["results"]["assignment_log"]
-        log_file_path = get_file_path(self.fn)
-        self.log = open(log_file_path, "a")
+        if fn is None:
+            self.fn = config.CONFIG["results"]["assignment_log"]
+            log_file_path = get_file_path(self.fn)
+            self.log = open(log_file_path, "a")
+        else:
+            self.fn = fn
+            self.log = open(self.fn, "a")
 
     def write(self, message):
         self.terminal.write(message)
