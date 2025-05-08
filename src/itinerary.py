@@ -71,7 +71,7 @@ import pandas as pd
 
 from src import config
 from src.utils import read_
-from src.globals import get_k_pv, get_platform, get_afc, get_etd, get_ttd
+from src.globals import get_k_pv, get_platform, get_afc, get_etd, get_tt, get_ttd
 from src.walk_time_filter import get_path_seg_to_pp_ids, get_transfer_from_feas_iti
 from src.walk_time_dis_calculator import WalkTimeDisModel
 
@@ -379,7 +379,322 @@ def attach_walk_dis_all(wtd: WalkTimeDisModel = None, left: pd.DataFrame = None)
     return df
 
 
-def filter_dis_file(dis_df_from_file:pd.DataFrame=None, left: pd.DataFrame = None) -> pd.DataFrame:
+def _build_prev_dep_mapper() -> pd.DataFrame:
+    """
+    Build a mapping from (train_id, board_ts) to prev_dep_ts.
+
+    [`train_id`, `board_ts`, `prev_dep_ts`]
+
+    :return: dataframe mapping (train_id, board_ts) -> prev_dep_ts
+    :rtype: pd.DataFrame
+    """
+    tt = pd.DataFrame(get_tt(), columns=["train_id", "nid",
+                                         "line", "upd", "arr_ts", "board_ts"])
+    tt['node_id'] = tt['nid']*10
+    tt.loc[tt['upd'] == -1, 'node_id'] += 1
+
+    tt_sorted = tt.sort_values(['node_id', 'board_ts'])
+    tt_sorted['prev_dep_ts'] = tt_sorted.groupby('node_id')[
+        'board_ts'].shift(1)
+    tt_filtered = tt_sorted[tt_sorted['prev_dep_ts'].notnull()]
+    res = tt_filtered[['train_id', 'board_ts', 'prev_dep_ts']]
+    return res
+
+
+def _attach_entry_dis_all_prev_dep(
+    wtd: WalkTimeDisModel = None,
+    left: pd.DataFrame = None,
+    prev_dep_mapper: pd.DataFrame = None,
+) -> pd.DataFrame:
+    """
+    Calculate the entry walk distribution and attach them to all left itineraries.
+
+    The CDF value is calculated based on the departure time of the previous train or tap-in time (if none or too small).
+
+    :param wtd: (optional) WalkTimeDisModel instance.
+        Defaults to None (automatically created with the latest etd, ttd CSV files).
+    :type wtd: WalkTimeDisModel, optional
+
+    :param left: (optional) DataFrame of left itineraries.
+        Defaults to None (read from left.pkl file).
+
+        Expected columns: [`rid`, `iti_id`, `path_id`, `seg_id`, `train_id`, `board_ts`, `alight_ts`]
+    :type left: pd.DataFrame, optional
+
+    :param prev_dep_mapper: (optional) DataFrame of train departure time mapper.
+        Defaults to None (automatically builded with _build_prev_dep_mapper).
+    :type prev_dep_mapper: pd.DataFrame, optional, default=None
+
+
+    :return: DataFrame of left itineraries with entry walk distribution columns attached:
+
+        - `rid`: The ID of the transaction record.
+        - `iti_id`: The itinerary ID.
+        - `path_id`: The path ID.
+        - `train_id`: The boarding train ID.
+        - `board_ts`: The boarding timestamp.
+        - `entry_pp_id`: The physical platform ID of the entry platform.
+        - `ts1`: The tap-in time of the rid.
+        - `prev_dep_ts`: The departure timestamp of previous train. (= ts1 if no prev_dep_ts)
+        - `dis`: The CDF value of from prev_dep_ts to board_ts, relative to ts1.
+
+    :rtype: pd.DataFrame
+    """
+    if wtd is None:
+        print("[INFO] Initializing WalkTimeDisModel for _attach_entry_dis()...")
+        wtd = WalkTimeDisModel(etd=get_etd(), ttd=get_ttd())
+    if left is None:
+        left = read_(config.CONFIG["results"]["left"])
+
+    # Extract first segment per itinerary
+    left_first_seg = left[left["seg_id"] == 1][[
+        "rid", "iti_id", "path_id", "train_id", "board_ts"]].copy()
+
+    # Map path_id → entry platform physical platform id (pp_id)
+    k_pv = get_k_pv()[:, :4]  # ["path_id", "pv_id", "node_id1", "node_id2"]
+    entry_ids = np.where(k_pv[:, 1] == 1)[0]
+    path_entry = k_pv[entry_ids][:, [0, -1]]  # [path_id, node_id (platform)]
+
+    node_id2pp_id = {i: j for j, i, _ in get_platform()}
+    path_entry_pp_id = np.hstack([path_entry, np.vectorize(
+        node_id2pp_id.get)(path_entry[:, 1]).reshape(-1, 1)])
+    path_id2entry_pp_id = {path_id: entry_pp_id for path_id,
+                           entry_pp_id in path_entry_pp_id[:, [0, 2]]}
+
+    # Map entry physical platform id
+    left_first_seg["entry_pp_id"] = left_first_seg["path_id"].map(
+        path_id2entry_pp_id)
+
+    # Calculate entry times relative to AFC tap-in times
+    afc_ts1 = pd.DataFrame(get_afc()[:, [0, 2]], columns=[
+        "rid", "ts1"]).set_index("rid")
+    left_first_seg["ts1"] = left_first_seg["rid"].map(afc_ts1["ts1"])
+
+    left_first_seg = left_first_seg.merge(
+        prev_dep_mapper, on=["train_id", "board_ts"], how="left")
+    left_first_seg.loc[left_first_seg["prev_dep_ts"].isna(
+    ), "prev_dep_ts"] = left_first_seg["ts1"]
+    left_first_seg.loc[left_first_seg["prev_dep_ts"] <
+                       left_first_seg["ts1"], "prev_dep_ts"] = left_first_seg["ts1"]
+
+    # Calculate entry walk distribution for each physical platform group
+    left_first_seg["dis"] = 0.0  # to be filled
+    for entry_pp_id, df_ps2pp_ in left_first_seg.groupby("entry_pp_id"):
+        # print(entry_pp_id, df_ps2pp_.shape)
+        df_ps2pp_["dis"] = wtd.compute_entry_cdf_from_pp(
+            pp_id=entry_pp_id,
+            times_start=df_ps2pp_["prev_dep_ts"] - df_ps2pp_["ts1"],
+            times_end=df_ps2pp_["board_ts"] - df_ps2pp_["ts1"],
+        )
+        left_first_seg.loc[df_ps2pp_.index, "dis"] = df_ps2pp_["dis"].values
+
+    return left_first_seg
+
+
+def _attach_transfer_dis_all_prev_dep(
+    wtd: WalkTimeDisModel = None,
+    left: pd.DataFrame = None,
+    prev_dep_mapper: pd.DataFrame = None,
+) -> pd.DataFrame:
+    """
+    Calculate the transfer walk distribution and attach them to all itineraries in `left`.
+
+    The CDF values are calculated based on the departure time of the previous train.
+
+    :param wtd: (optional) WalkTimeDisModel instance.
+        Defaults to None (automatically created with the latest etd, ttd CSV files).
+    :type wtd: WalkTimeDisModel, optional
+
+    :param left: (optional) DataFrame of left itineraries.
+        Defaults to None (read from `left.pkl` file).
+
+        Expected columns: [`rid`, `iti_id`, `path_id`, `seg_id`, `train_id`, `board_ts`, `alight_ts`].
+    :type left: pd.DataFrame, optional
+
+    :param prev_dep_mapper: (optional) DataFrame of train departure time mapper.
+        Defaults to None (automatically builded with _build_prev_dep_mapper).
+    :type prev_dep_mapper: pd.DataFrame, optional, default=None
+
+    :returns: DataFrame of itineraries with transfer walk distribution columns attached:
+
+        - `rid`: The ID of the transaction record.
+        - `iti_id`: The itinerary ID.
+        - `path_id`: The path ID.
+        - `seg_id`: The segment ID. (seg_id of the alighting train)
+        - `train_id`: The ID of the train.
+        - `alight_ts`: The alighting timestamp.
+        - `board_ts`: The boarding timestamp.
+        - `transfer_type`: The type of transfer (e.g., platform to platform).
+        - `pp_id_min`: The minimum physical platform ID.
+        - `pp_id_max`: The maximum physical platform ID.
+        - `prev_dep_ts`: The departure timestamp of the previous train. (= alight_ts if no previous train)
+        - `dis`: The distribution value of the transfer time.
+
+    :rtype: pd.DataFrame
+    """
+    if wtd is None:
+        print("[INFO] Initializing WalkTimeDisModel for _attach_transfer_dis()...")
+        wtd = WalkTimeDisModel(etd=get_etd(), ttd=get_ttd())
+    if left is None:
+        left = read_(config.CONFIG["results"]["left"], show_timer=False)
+
+    # ======================= code block copied from walk_time_filter.get_transfer_from_feas_iti() ===========
+
+    # delete (rid, iti_id) with only one seg
+    seg_count = left.groupby(['rid', 'iti_id'])[
+        'seg_id'].transform('nunique')
+    df = left.loc[seg_count > 1].copy()
+
+    # find rows that need to combine next row's board_ts
+    df['next_index'] = df.groupby(
+        ['rid', 'iti_id'])['seg_id'].shift(-1).notna()
+
+    # calculate transfer time
+    df["next_board_ts"] = df["board_ts"].shift(-1)
+    df = df[df["next_index"]]
+    df["next_board_ts"] = df["next_board_ts"].astype(int)
+    df["transfer_time"] = df["next_board_ts"] - df["alight_ts"]
+
+    # ======================= code block copied from walk_time_filter.get_transfer_from_feas_iti() ===========
+
+    # get essential data
+    df.drop(columns=["board_ts", "next_index"], inplace=True)
+    # ['rid', 'iti_id', 'path_id', 'seg_id', 'alight_ts', 'board_ts', 'transfer_time', 'train_id']
+    df.rename(columns={"next_board_ts": "board_ts"}, inplace=True)
+
+    # ["path_id", "seg_id", "pp_id1", "pp_id2", "transfer_type"]
+    df_ps2pp = get_path_seg_to_pp_ids()
+    df_ps2pp["pp_id_min"] = df_ps2pp[["pp_id1", "pp_id2"]].min(axis=1)
+    df_ps2pp["pp_id_max"] = df_ps2pp[["pp_id1", "pp_id2"]].max(axis=1)
+    df_ps2pp.drop(columns=["pp_id1", "pp_id2"], inplace=True)
+
+    # Merge path segments with transfer and path segments to physical platforms
+    df = df.merge(df_ps2pp, on=["path_id", "seg_id"], how="left")
+    df['path_id'] = df['path_id'].astype(int)
+
+    # Merge with prev_dep_mapper
+    df = df.merge(prev_dep_mapper, on=['train_id', 'board_ts'], how="left")
+    df.loc[df["prev_dep_ts"].isna(), "prev_dep_ts"] = df["alight_ts"]
+    df.loc[df["prev_dep_ts"] < df["alight_ts"],
+           "prev_dep_ts"] = df["alight_ts"]
+
+    # calculate transfer time CDF for each physical platform group
+    df["dis"] = 0.0  # to be filled
+    for (pp_id_min, pp_id_max), df_ in df.groupby(["pp_id_min", "pp_id_max"]):
+        # print(pp_id_min, pp_id_max, df_.shape)
+        dis = wtd.compute_transfer_cdf_from_pp(
+            pp_id_min, pp_id_max,
+            times_start=df_['prev_dep_ts'] - df_['alight_ts'],
+            times_end=df_["board_ts"] - df_["alight_ts"]
+        )
+        df.loc[df_.index, "dis"] = dis
+    return df
+
+
+def attach_walk_dis_all_prev_dep(wtd: WalkTimeDisModel = None, left: pd.DataFrame = None) -> pd.DataFrame:
+    """
+    Calculate the entry, egress, and transfer walk distributions and attach them to all itineraries in `left`.
+
+    Note that previous departure time is used in entry and transfer CDF calculations.
+
+    Approximately 38 seconds for the left with 46,637,884 itineraries. (PC)
+
+    This is a one-timer function. No need to calculate distribution values every time of assignment.
+
+    So saving the distribution values to a file is recommended.
+
+    Recommended usage:
+    ```python
+    dis_df = attach_walk_dis_all_prev_dep()
+    save_(config.CONFIG["results"]["dis"], dis_df)
+    ```
+
+    :param wtd: (optional) WalkTimeDisModel instance.
+        Defaults to None (automatically created with the latest etd, ttd CSV files).
+    :type wtd: WalkTimeDisModel, optional
+
+    :param left: (optional) DataFrame of left itineraries.
+        Defaults to None (read from left.pkl file).
+
+        Expected columns: [`rid`, `iti_id`, `path_id`, `seg_id`, `train_id`, `board_ts`, `alight_ts`].
+    :type left: pd.DataFrame, optional
+
+    :returns: DataFrame of entry, egress, and transfer walk distributions for all itineraries.
+
+        Each row is a walk link with the following columns:
+
+        - `rid`: The ID of the transaction record.
+        - `iti_id`: The itinerary ID.
+        - `path_id`: The path ID.
+        - `seg_id`: The segment ID. (in_vehicle seg_id for transfer, 0 for entry, -1 for egress)
+        - `t0`: The starting timestamp of the walk link.
+        - `t1`: The starting timestamp of CDF calculation (entry, transfer) (=t0 for egress).
+        - `t2`: The boarding timestamp.
+        - `pp_id1`: pp_id_min for transfer, to-board pp_id for entry, 0 for egress.
+        - `pp_id2`: pp_id_max for transfer, 0 for entry, alighted pp_id for egress.
+        - `dis`: The distribution value of the time.
+
+    :rtype: pd.DataFrame
+
+    """
+    if wtd is None:
+        print(
+            "[INFO] Initializing WalkTimeDisModel for attach_walk_dis_all_prev_dep()...")
+        wtd = WalkTimeDisModel(etd=get_etd(), ttd=get_ttd())
+    if left is None:
+        left = read_(config.CONFIG["results"]["left"], show_timer=False)
+
+    prev_dep_mapper = _build_prev_dep_mapper()
+    print("[INFO] Attaching entry walk distribution for all itineraries...")
+    df_ent = _attach_entry_dis_all_prev_dep(
+        wtd=wtd, left=left, prev_dep_mapper=prev_dep_mapper)
+    df_ent["seg_id"] = 0  # set entry seg_id to 0
+    df_ent["pp_id2"] = 0  # set entry pp_id2 to 0
+    df_ent = df_ent.rename(
+        columns={
+            "ts1": "t0",  # when the walk starts
+            "prev_dep_ts": "t1",  # when the CDF calculation starts
+            "board_ts": "t2",  # when the CDF calculation stops
+            "entry_pp_id": "pp_id1"}
+    )[[
+        "rid", 'iti_id', 'path_id', 'seg_id', 't0', 't1', 't2', 'pp_id1', 'pp_id2', 'dis'
+    ]]
+
+    print("[INFO] Attaching egress walk distribution for all itineraries...")
+    df_egr = _attach_egress_dis_all(wtd=wtd, left=left)
+    df_egr["seg_id"] = -1  # set egress seg_id to -1
+    df_egr["pp_id1"] = 0  # set egress pp_id1 to 0
+    df_egr["t0"] = df_egr["alight_ts"]  # when the walk starts
+    df_egr = df_egr.rename(
+        columns={
+            "alight_ts": "t1",  # when the walk starts
+            "ts2": "t2",  # when the PDF calculation happens
+            "egress_pp_id": "pp_id2",
+        }
+    )[[
+        "rid", "iti_id", "path_id", "seg_id", "t0", "t1", "t2", "pp_id1", "pp_id2", "dis"
+    ]]
+
+    print("[INFO] Attaching transfer walk distribution for all itineraries...")
+    df_trans = _attach_transfer_dis_all_prev_dep(
+        wtd=wtd, left=left, prev_dep_mapper=prev_dep_mapper)
+    df_trans = df_trans.rename(
+        columns={
+            "pp_id_min": "pp_id1",
+            "pp_id_max": "pp_id2",
+            "alight_ts": "t0",  # when the walk starts
+            "prev_dep_ts": "t1",  # when the CDF calculation starts
+            "board_ts": "t2"  # when the CDF calculation stops
+        }
+    )[[
+        "rid", "iti_id", "path_id", "seg_id", "t0", "t1", "t2", "pp_id1", "pp_id2", "dis"
+    ]]
+
+    df = pd.concat([df_trans, df_ent, df_egr], ignore_index=True)
+    return df
+
+
+def filter_dis_file(dis_df_from_file: pd.DataFrame = None, left: pd.DataFrame = None) -> pd.DataFrame:
     """
     Filter the distribution file to only include the itineraries in `left`.
 
@@ -471,6 +786,7 @@ def compute_itinerary_probabilities(dis_attached_iti: pd.DataFrame, penalized_it
         
         Should be generated by either:
             - `src.itinerary.attach_walk_dis_all()`
+            - `src.itinerary.attach_walk_dis_all_prev_dep()`
             - `src.itinerary.filter_dis_file()`
     :type dis_attached_iti: pd.DataFrame
     

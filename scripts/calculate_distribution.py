@@ -16,7 +16,7 @@ Dependencies:
 - src.utils
 """
 from src import config
-from src.itinerary import attach_walk_dis_all
+from src.itinerary import attach_walk_dis_all, attach_walk_dis_all_prev_dep
 from src.utils import read_, save_
 from src.globals import get_etd, get_ttd
 from src.walk_time_dis_calculator import WalkTimeDisModel
@@ -40,7 +40,10 @@ def main():
     left = read_(config.CONFIG["results"]["left"], show_timer=False)  # load to-calculate data
     
     # calculate distribution
-    dis_df = attach_walk_dis_all(wtd=wtd, left=left)  # takes 35s to run (PC)
+    if not config.CONFIG["parameters"]["use_cdf_prev_train"]:
+        dis_df = attach_walk_dis_all(wtd=wtd, left=left)  # takes 35s to run (PC)
+    else:
+        dis_df = attach_walk_dis_all_prev_dep(wtd=wtd, left=left)  # takes 38s to run (PC)
     save_(fn=config.CONFIG["results"]["dis"], data=dis_df, auto_index_on=False)  # only one time save
     return
 
