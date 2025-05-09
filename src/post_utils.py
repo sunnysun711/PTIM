@@ -43,16 +43,16 @@ def add_seg_id_to_k_pv(k_pv: np.ndarray) -> np.ndarray:
     ...
 
 
-def add_left_behind_times_to_traj(config_file: str) -> pd.DataFrame:
+def add_cols_to_traj(config_file: str) -> pd.DataFrame:
     """
     add left-behind-times columns to trajectory dataframe.
     
-    Specifically: [node_id1, prev_ts, left_behind_count]
+    Specifically: [node_id1, node_id2, line, updown, prev_ts, left_behind_count]
 
     :param config_file: config file name, example: `config1`
     :type config_file: str
     :return: DataFrame with ['rid', 'iti_id', 'path_id', 'seg_id', 'train_id', 'board_ts',
-       'alight_ts', 'node_id1', 'prev_ts', 'left_behind_count']
+       'alight_ts', 'node_id1', 'node_id2', 'line', 'updown', 'prev_ts', 'left_behind_count']
     :rtype: pd.DataFrame
     """
     config.load_config(f"configs/{config_file}.yaml")
@@ -63,7 +63,7 @@ def add_left_behind_times_to_traj(config_file: str) -> pd.DataFrame:
     tt = get_tt()
 
     df_k_pv = pd.DataFrame(k_pv, columns=["path_id", "pv_id", "node_id1", "node_id2", "link_type", "line", "updown", "seg_id"])
-    traj = traj.merge(df_k_pv[["path_id", "seg_id", "node_id1"]], on=["path_id", "seg_id"], how='left')
+    traj = traj.merge(df_k_pv[["path_id", "seg_id", "node_id1", "node_id2", "line", "updown"]], on=["path_id", "seg_id"], how='left')
     traj["prev_ts"] = traj["alight_ts"].shift(1)
 
     df_rid_ts1 = pd.DataFrame(afc[:, [0, 2]], columns=["rid", "ts1"])
