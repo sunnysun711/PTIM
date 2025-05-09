@@ -26,12 +26,20 @@ from src.walk_time_dis_fit import (
 )
 
 
-def analyze_assigned_walk_times():
-    # eg_t = filter_egress_all()
+def analyze_assigned_walk_times(figure_subfolder_suffix: str):
+    """
+    analyze assigned walk times and plot their distributions.
+    
+    plotting will be saved in a figure subfolder.
+
+    :param figure_subfolder_suffix: added to subfolder, e.g. "test" -> "figures/ETD_test/" and "figures/TTD_test/"
+    :type figure_subfolder_suffix: str
+    """
+    eg_t = filter_egress_all()
     tr_t = filter_transfer_all()
     
-    # plot_egress_all(eg_t, save_on=True, save_subfolder="ETD541")
-    plot_transfer_all(tr_t, save_on=True, save_subfolder="TTD541", abs_max=2000)
+    plot_egress_all(eg_t, save_on=True, save_subfolder=f"ETD_{figure_subfolder_suffix}")
+    plot_transfer_all(tr_t, save_on=True, save_subfolder=f"TTD_{figure_subfolder_suffix}", abs_max=2000)
     ...
 
 

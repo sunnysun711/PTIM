@@ -192,6 +192,7 @@ def plot_egress_all(
     :type abs_max: int, optional, default=500
     """
     platforms = get_platform()  # pp_id, node_id, uid
+    eg_t['egress_time'] = eg_t['egress_time'].astype(float)
 
     saving_dir = config.CONFIG["figure_folder"] + "/" + save_subfolder
     if save_subfolder and not os.path.exists(saving_dir):
@@ -285,6 +286,7 @@ def plot_transfer_all(
     print("[INFO] Plotting TTD...")
     tr_t["pp_id_min"] = tr_t[["pp_id1", "pp_id2"]].min(axis=1)
     tr_t["pp_id_max"] = tr_t[["pp_id1", "pp_id2"]].max(axis=1)
+    tr_t["transfer_time"] = tr_t["transfer_time"].astype(float)
 
     # egress-entry transfers
     for (pp_id_min, pp_id_max), df_ in tr_t[tr_t["transfer_type"] == "egress-entry"].groupby(
