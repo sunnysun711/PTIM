@@ -71,7 +71,7 @@ def add_cols_to_traj(config_file: str) -> pd.DataFrame:
     traj.loc[traj["seg_id"] == 1, "prev_ts"] = traj.loc[traj["seg_id"] == 1, "ts1"]
 
     dep_times_per_node = {
-        node: np.sort(tt[(tt[:, 1] == node // 10) & (tt[:, 3] == (1 if node % 10 == 0 else -1))][:, 4])
+        node: np.sort(tt[(tt[:, 1] == node // 10) & (tt[:, 3] == (1 if node % 10 == 0 else -1))][:, 5])
         for node in traj["node_id1"].unique()
     }
     print(f"Prepared dep_times for {len(dep_times_per_node)} nodes")
@@ -88,7 +88,7 @@ def add_cols_to_traj(config_file: str) -> pd.DataFrame:
         idx_arr = np.fromiter(idx_list, dtype=int)
         prev_ts = traj["prev_ts"].values[idx_arr]
         board_ts = traj["board_ts"].values[idx_arr]
-        result_arr[idx_arr] = np.searchsorted(dep_times, board_ts, side='left') - np.searchsorted(dep_times, prev_ts, side='left')
+        result_arr[idx_arr] = np.searchsorted(dep_times, board_ts, side='left') - np.searchsorted(dep_times, prev_ts, side='right')
 
     traj["left_behind_count"] = result_arr
     traj["prev_ts"] = traj["prev_ts"].astype(int)
