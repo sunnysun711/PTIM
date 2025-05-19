@@ -104,7 +104,7 @@ def reject_outlier(data: np.ndarray, method: str = "zscore", abs_max: int = 500)
     return data[(data >= lb) & (data <= ub)]
 
 
-def fit_pdf_cdf(data: np.ndarray, method: str = "kde") -> tuple[Callable, Callable]:
+def fit_pdf_cdf(data: np.ndarray, method: str = "kde", hbar: float = None) -> tuple[Callable, Callable]:
     """
     Fit a probability density function (PDF) and cumulative distribution function (CDF) to the input data.
 
@@ -112,48 +112,91 @@ def fit_pdf_cdf(data: np.ndarray, method: str = "kde") -> tuple[Callable, Callab
     :type data: np.ndarray
 
     :param method: Method to fit the PDF and CDF. Options are 'kde' (Kernel Density Estimation),
-                   'gamma' (Gamma Distribution), and 'lognorm' (Log-Normal Distribution).
+                   'gamma' (Gamma Distribution), or 'lognorm' (Log-Normal Distribution).
     :type method: str, optional, default="kde"
+
+    :param hbar: If provided, indicates that data = true_walk + Uniform(0, hbar),
+                 and a deconvolution step will be applied to recover true_walk distribution.
+    :type hbar: float or None
 
     :returns: A tuple containing the fitted PDF function and CDF function.
     :rtype: tuple[Callable, Callable]
 
     :raises Exception: If an invalid method is provided.
     """
+    import numpy as np
+    from scipy.stats import gaussian_kde, gamma, lognorm
+    from scipy.fft import fft, ifft
+
+    # Evaluation grid
+    # x = np.linspace(0, np.max(data) * 1.2, 2**12)
+    # dx = x[1] - x[0]
+    x = np.arange(0, 501)
+    dx = 1.0
+
+    # Step 1: Fit PDF and CDF (without deconvolution)
     if method == "kde":
-        from scipy.stats import gaussian_kde
         kde = gaussian_kde(data)
-        return kde, lambda x_values: np.array([kde.integrate_box_1d(0, x) for x in x_values])
+        raw_pdf = kde(x)
     elif method == "gamma":
-        from scipy.stats import gamma
         params = gamma.fit(data, floc=0)
-        # print(params)
-        return gamma(*params).pdf, gamma(*params).cdf
+        raw_pdf = gamma(*params).pdf(x)
     elif method == "lognorm":
-        from scipy.stats import lognorm
         params = lognorm.fit(data)
-        # print(params)
-        return lognorm(*params).pdf, lognorm(*params).cdf
+        raw_pdf = lognorm(*params).pdf(x)
     else:
-        raise Exception(
-            "Please use either kde, gamma, or lognorm method to fit pdf!")
+        raise Exception("Please use either 'kde', 'gamma', or 'lognorm' method to fit pdf!")
+
+    # Step 2: Deconvolution if hbar is specified
+    if hbar is not None:
+        # Construct uniform kernel in [0, hbar]
+        kernel = np.zeros_like(x)
+        mask = (x >= 0) & (x <= hbar)
+        kernel[mask] = 1 / hbar
+
+        F_pdf = fft(raw_pdf)
+        F_kernel = fft(kernel)
+        eps = 1e-3  # regularization
+        F_deconv = F_pdf / (F_kernel + eps)
+        deconv_pdf = np.real(ifft(F_deconv))
+        deconv_pdf = np.clip(deconv_pdf, 0, None)
+        deconv_pdf /= np.sum(deconv_pdf) * dx  # re-normalize
+        pdf_vals = deconv_pdf
+    else:
+        pdf_vals = raw_pdf
+
+    # Step 3: Build interpolation-based PDF and CDF functions
+    def pdf_fn(xx): return np.interp(xx, x, pdf_vals, left=0, right=0)
+    cdf_vals = np.cumsum(pdf_vals) * dx
+    def cdf_fn(xx): return np.interp(xx, x, cdf_vals, left=0, right=1)
+
+    return pdf_fn, cdf_fn
 
 
-def evaluate_fit(data: np.ndarray, cdf_func: Callable) -> tuple[float, float]:
+def evaluate_fit(data: np.ndarray, cdf_func: Callable, hbar: float = None) -> tuple[float, float]:
     """
-    Evaluate the fit of a cumulative distribution function (CDF) to the input data.
+    Evaluate the fit of a CDF function to empirical data using the Kolmogorov-Smirnov test.
 
     :param data: Input data array.
     :type data: np.ndarray
-
-    :param cdf_func: CDF function to evaluate.
+    
+    :param cdf_func: Fitted CDF function.
     :type cdf_func: Callable
+    
+    :param hbar: If given, compare to Uniform(0, hbar) + fitted CDF for deconvolution.
+    :type hbar: float or None
 
-    :returns: A tuple containing the K-S statistic and the p-value of the K-S test.
-    :rtype: tuple[float, float]
+    :return: KS statistic and p-value.
     """
     data_sorted = np.sort(data)
-    return kstest(data_sorted, cdf_func)
+    if hbar is None:
+        return kstest(data_sorted, cdf_func)
+    else:
+        # simulate uniform wait and fitted walk sum
+        u = np.random.uniform(0, hbar, size=data_sorted.shape[0])
+        walk_sim = np.random.choice(data_sorted, size=data_sorted.shape[0])
+        sim_sum = u + walk_sim
+        return kstest(sim_sum, cdf_func)
 
 
 def fit_one_physical_platform(pp_id: int, eg_t_data: np.ndarray, x: np.ndarray) -> np.ndarray | None:
@@ -322,3 +365,80 @@ def fit_transfer_time_dis_all(tr_t: pd.DataFrame) -> pd.DataFrame:
     for col in ["pp_id_min", "pp_id_max", "x"]:
         res[col] = res[col].astype(int)
     return res
+
+
+def _test_fit_conv(hbar: float = None):
+    """
+    Test the distribution fitting (with optional deconvolution) on sample transfer time data.
+    """
+    from src.utils import read_
+    import matplotlib
+    matplotlib.use("Qt5Agg")
+    import matplotlib.pyplot as plt
+    from scipy.stats import kstest
+    print("[TEST] Load sample transfer data...")
+    # [rid(index), path_id, seg_id, pp_id1, pp_id2, alight_ts, transfer_time, transfer_type]
+    df = read_("transfer_times", show_timer=False, latest_=True)
+
+    pp_id1, pp_id2 = df[df['transfer_type'] == "egress-entry"].sample(n=1)[["pp_id1", "pp_id2"]].values.flatten()
+    print(pp_id1, pp_id2)
+    
+    df_sub = df[(df['pp_id1'] == pp_id1) & (df['pp_id2'] == pp_id2)]
+    df_sub = df_sub[df_sub["transfer_time"] <= 500]
+
+    sample_data = df_sub["transfer_time"].values
+    x = np.arange(0, 501)
+
+    methods = ["kde", "gamma", "lognorm"]
+    results_pdf = {}
+    results_cdf = {}
+    results_pdf2 = {}
+    results_cdf2 = {}
+
+    for method in methods:
+        print(f"\n[INFO] Fitting method: {method} {'(with deconvolution)' if hbar else ''}")
+        pdf, cdf = fit_pdf_cdf(sample_data, method=method, hbar=hbar)
+        pdf_vals = pdf(x)
+        cdf_vals = cdf(x)
+        stat, pval = evaluate_fit(sample_data, cdf, hbar=hbar)
+        print(f"  KS statistic: {stat:.4f}, p-value: {pval:.4f}")
+        results_pdf[method] = pdf_vals
+        results_cdf[method] = cdf_vals
+    
+    for method in methods:
+        print(f"\n[INFO] Fitting method: {method} {'(with deconvolution)' if hbar else ''}")
+        pdf, cdf = fit_pdf_cdf(sample_data, method=method, hbar=None)
+        pdf_vals = pdf(x)
+        cdf_vals = cdf(x)
+        stat, pval = evaluate_fit(sample_data, cdf, hbar=None)
+        print(f"  KS statistic: {stat:.4f}, p-value: {pval:.4f}")
+        results_pdf2[method] = pdf_vals
+        results_cdf2[method] = cdf_vals
+
+    # Plot PDF comparison with histogram
+    plt.figure(figsize=(8, 5))
+    plt.hist(sample_data, bins=50, density=True, alpha=0.4, label="Empirical (hist)", color='gray')
+    for method in methods:
+        label = f"{method.upper()} {'(deconv)' if hbar else ''}"
+        plt.plot(x, results_pdf[method], label=label, lw=2)
+    
+    for method in methods:
+        label = f"{method.upper()}"
+        plt.plot(x, results_pdf2[method], label=label+"(no H)", lw=2)
+    
+    plt.title(f"PDF Comparison {'(Deconvolved)' if hbar else '(Raw)'}")
+    plt.xlabel("Transfer time (s)")
+    plt.ylabel("Density")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+    
+    return
+
+if __name__ == "__main__":
+    from src import config
+    config.load_config("configs/config_backup.yaml")
+    
+    _test_fit_conv(hbar=500.0)
+    pass
