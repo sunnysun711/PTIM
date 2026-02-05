@@ -10,3 +10,4 @@ scripts/__pycache__/
 /results*/
 /figures/
 .ipynb_checkpoints/
+.DS_Store
